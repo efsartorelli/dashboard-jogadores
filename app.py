@@ -13,18 +13,134 @@ st.set_page_config(layout="wide")
 # ======================
 st.markdown("""
 <style>
-.title-center {
-    text-align: center;
-    font-size: 38px;
-    font-weight: bold;
-    margin-bottom: 25px;
-    color: #146b3a;
+
+/* ================= HEADER ================= */
+.header-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 60px;
 }
+
+.header-box {
+    background: linear-gradient(135deg,#fff3b0,#ffe082);
+    padding: 18px 28px;
+    border-radius: 18px;
+    box-shadow: 0px 6px 18px rgba(0,0,0,0.25);
+}
+
+.header-title {
+    font-size: 34px;
+    font-weight: 800;
+    color: #5c4a00;
+}
+
+.header-sub {
+    color: #7a6500;
+    margin-left: 10px;
+}
+
+/* ================= TITULO PODIO ================= */
+.podium-title {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.podium-title span {
+    display: inline-block;
+    padding: 10px 24px;
+    border-radius: 16px;
+    background: #2e7d32;
+    color: white;
+    font-weight: 700;
+    font-size: 20px;
+}
+
+/* ================= PODIO ================= */
+.podium-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 35px;
+}
+
+.podium {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+}
+
+/* BLOCO */
+.block {
+    width: 130px;
+    padding: 12px;
+    border-radius: 18px 18px 0 0;
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+
+    /* ✅ CONTRASTE GARANTIDO */
+    color: #1a1a1a;
+
+    /* ✅ CONTORNO */
+    text-shadow:
+        0px 1px 0px rgba(255,255,255,0.6),
+        0px 0px 4px rgba(0,0,0,0.4);
+
+    transition: 0.25s;
+}
+
+/* ALTURA + CORES */
+.first  { height: 210px; background: #d4edda; color:#1b5e20 !important;}
+.second { height: 170px; background: #e8f5e9; color:#1b5e20 !important;}
+.third  { height: 150px; background: #fff9c4; color:#8a5a00 !important;}
+.fourth { height: 130px; background: #e3f2fd; color:#0d47a1 !important;}
+.fifth  { height: 120px; background: #f1f8e9; color:#33691e !important;}
+
+/* HOVER */
+.block:hover {
+    transform: translateY(-6px) scale(1.03);
+}
+
+/* ================= NOMES ================= */
+.player {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.player span {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    min-width: 110px;
+    text-align: center;
+
+    padding: 6px 14px;
+    border-radius: 12px;
+
+    background: rgba(255,255,255,0.9);
+    color: #111;
+
+    font-weight: 600;
+
+    /* efeito moderno */
+    box-shadow: 0px 3px 8px rgba(0,0,0,0.2);
+}
+
+/* DARK MODE */
+@media (prefers-color-scheme: dark) {
+    .player span {
+        background: rgba(200,200,200,0.2);
+        color: white;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 # ======================
-# LOAD DATA
+# DATA
 # ======================
 @st.cache_data
 def get_data():
@@ -33,20 +149,80 @@ def get_data():
 df = get_data()
 
 # ======================
-# TITULO
+# HEADER
 # ======================
-st.markdown('<div class="title-center">Dashboard de Jogadores by Enzo Sartorelli</div>', unsafe_allow_html=True)
+st.markdown(
+'<div class="header-container"><div class="header-box">'
+'<span class="header-title">Dashboard de Jogadores PoGo</span>'
+'<span class="header-sub">by Enzo Sartorelli</span>'
+'</div></div>', unsafe_allow_html=True
+)
+
+# ======================
+# PODIO
+# ======================
+idx = df.groupby("id_jogador")["catches"].idxmax()
+ranking_podio = df.loc[idx][["nickname","catches"]].sort_values("catches", ascending=False).head(5).reset_index(drop=True)
+
+visual_order = [3,1,0,2,4]
+classes_map = {0:"first",1:"second",2:"third",3:"fourth",4:"fifth"}
+medals = {0:"🥇",1:"🥈",2:"🥉",3:"🏅",4:"🏅"}
+
+html = '<div class="podium-container"><div class="podium">'
+
+for pos in visual_order:
+    if pos >= len(ranking_podio): continue
+    row = ranking_podio.iloc[pos]
+    val = f"{int(row['catches']):,}".replace(",", ".")
+
+    html += f'<div><div class="block {classes_map[pos]}">{medals[pos]}<br>#{pos+1}<br>{val}</div>'
+    html += f'<div class="player"><span>{row["nickname"]}</span></div></div>'
+
+html += '</div></div>'
+st.markdown(html, unsafe_allow_html=True)
+
+st.divider()
+
+# ======================
+# GRAFICO
+# ======================
+st.subheader("📊 Comparação entre Jogadores")
+
+players_selected = st.multiselect(
+    "Selecione até 8 jogadores",
+    sorted(df["nickname"].unique()),
+    max_selections=8
+)
+
+if players_selected:
+    fig = go.Figure()
+    cores = ["#00E676","#69F0AE","#00C853","#18FFFF","#40C4FF","#FFD740","#FFAB00","#FF6F00"]
+
+    for i, player in enumerate(players_selected):
+        df_p = df[df["nickname"]==player].sort_values("date")
+
+        fig.add_trace(go.Scatter(
+            x=df_p["date"],
+            y=df_p["catches"],
+            mode="lines+markers",
+            name=player,
+            line=dict(width=4,color=cores[i%len(cores)],shape="spline")
+        ))
+
+    fig.update_layout(template="plotly_dark",height=520,hovermode="x unified")
+    st.plotly_chart(fig, use_container_width=True)
 
 # ======================
 # FILTROS
 # ======================
+st.divider()
 st.subheader("🎯 Filtros")
 
-col_f1, col_f2, col_f3, col_f4 = st.columns([2,2,1,1])
+col1,col2,col3,col4 = st.columns([2,2,1,1])
 
 states = sorted(df["state"].dropna().unique())
 
-with col_f1:
+with col1:
     selected_states = st.multiselect("📍 Estado", states)
 
 df_filtered = df.copy()
@@ -54,52 +230,44 @@ df_filtered = df.copy()
 if selected_states:
     df_filtered = df_filtered[df_filtered["state"].isin(selected_states)]
 
-players = sorted(df_filtered["nickname"].dropna().unique())
+players = sorted(df_filtered["nickname"].unique())
 
-with col_f2:
+with col2:
     selected_players = st.multiselect("👤 Jogadores", players)
 
 if selected_players:
     df_filtered = df_filtered[df_filtered["nickname"].isin(selected_players)]
 
-with col_f3:
-    somente_melhor = st.checkbox("✅ Melhor média")
+with col3:
+    somente_melhor = st.checkbox("🏆 Melhor média")
 
-with col_f4:
+with col4:
     apenas_mensais = st.checkbox("📅 Apenas mensais")
 
 df = df_filtered
 
 # ======================
-# LAYOUT
+# RANKINGS
 # ======================
-col1, col2 = st.columns(2)
+col1,col2 = st.columns(2)
 
-# ======================
-# 🏆 RANKING 1
-# ======================
 with col1:
-    st.subheader("🏆 Maior Catch por Jogador")
+    st.subheader("🏆 Maior Captura por Jogador")
 
     idx = df.groupby("id_jogador")["catches"].idxmax()
 
     ranking = df.loc[idx][["nickname","state","catches","date"]]
     ranking = ranking.sort_values("catches", ascending=False)
 
-    ranking["ranking"] = range(1, len(ranking)+1)
+    ranking["Ranking"] = range(1, len(ranking)+1)
+    ranking["Catches"] = ranking["catches"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+    ranking["Data"] = pd.to_datetime(ranking["date"]).dt.date
 
-    ranking["catches"] = ranking["catches"].apply(lambda x: f"{int(x):,}".replace(",", "."))
-    ranking["date"] = ranking["date"].dt.date
-
-    ranking = ranking[["ranking","nickname","state","catches","date"]]
-
+    ranking = ranking[["Ranking","nickname","state","Catches","Data"]]
     ranking.columns = ["Ranking","Jogador","Estado","Catches","Data"]
 
     st.dataframe(ranking, use_container_width=True, height=500, hide_index=True)
 
-# ======================
-# 📈 RANKING 2
-# ======================
 with col2:
     st.subheader("📈 Maior Média Diária")
 
@@ -117,11 +285,11 @@ with col2:
         for i in range(len(group)):
             for j in range(i+1, len(group)):
 
-                d1 = group.loc[i,"date"]
-                d2 = group.loc[j,"date"]
+                d1 = group.loc[i, "date"]
+                d2 = group.loc[j, "date"]
 
-                c1 = group.loc[i,"catches"]
-                c2 = group.loc[j,"catches"]
+                c1 = group.loc[i, "catches"]
+                c2 = group.loc[j, "catches"]
 
                 dias = (d2 - d1).days
                 ganho = c2 - c1
@@ -149,7 +317,9 @@ with col2:
     if not df_media.empty:
 
         if somente_melhor:
-            df_media = df_media.sort_values("media", ascending=False).groupby("nickname").head(1)
+            df_media = df_media.sort_values("media", ascending=False) \
+                               .groupby("nickname") \
+                               .head(1)
 
         df_media = df_media.sort_values("media", ascending=False)
 
@@ -168,67 +338,36 @@ with col2:
         st.dataframe(df_media, use_container_width=True, height=500, hide_index=True)
 
 # ======================
-# 📊 GRÁFICO
-# ======================
-st.divider()
-st.subheader("📊 Evolução do Jogador")
-
-player = st.selectbox("Selecione um jogador", sorted(df["nickname"].unique()))
-
-df_p = df[df["nickname"]==player].sort_values("date")
-
-if len(df_p)>0:
-
-    df_p["diff"] = df_p["catches"].diff().fillna(0)
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=df_p["date"],
-        y=df_p["catches"],
-        mode="lines+markers",
-        line=dict(color="#146b3a", width=3),
-        marker=dict(size=8),
-        customdata=df_p["diff"],
-        hovertemplate=
-        "<b>Data:</b> %{x}<br>" +
-        "<b>Total:</b> %{y:,}<br>" +
-        "<b>Ganho:</b> %{customdata:,}<extra></extra>"
-    ))
-
-    fig.update_layout(template="plotly_white", height=450)
-
-    st.plotly_chart(fig, use_container_width=True)
-
-# ======================
-# 📊 ESTATÍSTICAS
+# 📊 Estatísticas Gerais
 # ======================
 st.divider()
 st.subheader("📊 Estatísticas Gerais")
 
 idx = df.groupby("id_jogador")["catches"].idxmax()
+
 base = df.loc[idx][["id_jogador","nickname","state","catches"]]
 
 base = base.sort_values("catches", ascending=False)
-base["position"] = range(1,len(base)+1)
+base["position"] = range(1, len(base)+1)
 
-# KPI
-c1,c2,c3,c4 = st.columns(4)
+# KPIs
+c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("Estados", base["state"].nunique())
 c2.metric("Jogadores", base["id_jogador"].nunique())
-c3.metric("Soma Top", f"{int(base['catches'].sum()):,}".replace(",","."))
+c3.metric("Soma Top", f"{int(base['catches'].sum()):,}".replace(",", "."))
 c4.metric("Soma Total", f"{int(df['catches'].sum()):,}".replace(",", "."))
 
-# tabela estado
+# ======================
+# 📊 TABELA POR ESTADO (COMPLETA)
+# ======================
 dados = []
-
 total = len(base)
 
 for estado, group in base.groupby("state"):
 
     qtd = len(group)
-    perc = qtd/total
+    perc = qtd / total
 
     avg_catch = group["catches"].mean()
     avg_pos = group["position"].mean()
@@ -241,60 +380,46 @@ for estado, group in base.groupby("state"):
         "Qtd Jogadores": qtd,
         "%": f"{perc:.0%}",
         "Média Catches": int(avg_catch),
-        "Média Ranking": round(avg_pos,2),
+        "Média Ranking": round(avg_pos, 2),
         "Melhor Ranking": f"{best_pos} 👤 {best_player}"
     })
 
 df_estado = pd.DataFrame(dados)
 
-# ✅ ORDEM ALFABÉTICA
 df_estado = df_estado.sort_values("Estado")
 
-# format
 df_estado["Média Catches"] = df_estado["Média Catches"].apply(
-    lambda x: f"{x:,}".replace(",",".")
+    lambda x: f"{x:,}".replace(",", ".")
 )
 
 st.dataframe(df_estado, use_container_width=True, height=400, hide_index=True)
 
-# =========================
-# 📊 DISTRIBUIÇÃO DE CATCHES
-# =========================
-
+# ======================
+# DISTRIBUIÇÃO (ATUALIZADA)
+# ======================
 st.divider()
 st.subheader("📊 Distribuição de Jogadores por Faixa de Catches")
 
-# ✅ base correta (maior catch por jogador)
-idx = df.groupby("id_jogador")["catches"].idxmax()
-base_dist = df.loc[idx][["id_jogador", "nickname", "catches"]]
-
-# =========================
-# FAIXAS
-# =========================
 faixas = [
-    500000,600000,700000,800000,900000,
-    1000000,1100000,1200000,1300000,1400000,
-    1500000,1750000,2000000,2250000,2500000,
-    2750000,3000000
+    300000, 400000, 500000, 600000, 700000, 800000, 900000,
+    1000000, 1100000, 1200000, 1300000, 1400000,
+    1500000, 1750000, 2000000, 2250000, 2500000,
+    2750000, 3000000
 ]
 
 resultados = []
-
-total_jogadores = len(base_dist)
 
 for i in range(len(faixas)-1):
 
     inferior = faixas[i]
     superior = faixas[i+1]
 
-    # jogadores na faixa
-    faixa_df = base_dist[
-        (base_dist["catches"] >= inferior) &
-        (base_dist["catches"] < superior)
+    faixa_df = base[
+        (base["catches"] >= inferior) &
+        (base["catches"] < superior)
     ]
 
-    # jogadores acima
-    acima_df = base_dist[base_dist["catches"] >= superior]
+    acima_df = base[base["catches"] >= superior]
 
     resultados.append({
         "Faixa": f"{inferior:,} - {superior:,}".replace(",", "."),
@@ -304,9 +429,6 @@ for i in range(len(faixas)-1):
 
 df_faixas = pd.DataFrame(resultados)
 
-# =========================
-# FORMATAR
-# =========================
 st.dataframe(
     df_faixas,
     use_container_width=True,
