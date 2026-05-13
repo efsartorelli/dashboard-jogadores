@@ -59,7 +59,16 @@ st.markdown("""
 .podium-container {
     display: flex;
     justify-content: center;
-    margin-bottom: 35px;
+    overflow-x: auto;          /* ✅ permite scroll */
+    padding-bottom: 10px;
+}
+
+/* container real */
+.podium {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    min-width: 650px;          /* ✅ força largura mínima */
 }
 
 .podium {
