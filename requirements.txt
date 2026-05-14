@@ -1,10 +1,5 @@
 streamlit
 pandas
-<<<<<<< HEAD
 numpy
 plotly
 openpyxl
-=======
-plotly
-openpyxl
->>>>>>> 8de7978d80c81cd9934320adbf1ebd3395b7fa29

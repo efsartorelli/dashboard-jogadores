@@ -1,10 +1,6 @@
 [theme]
-<<<<<<< HEAD
 base="dark"
 primaryColor="#e2b84f"
 backgroundColor="#0f1008"
 secondaryBackgroundColor="#241b13"
 textColor="#f0efff"
-=======
-base="light"
->>>>>>> 8de7978d80c81cd9934320adbf1ebd3395b7fa29

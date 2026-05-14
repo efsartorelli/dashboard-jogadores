@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from html import escape
 
 import numpy as np
@@ -107,6 +106,46 @@ def initials(name):
     return (cleaned[:2] or "BR").upper()
 
 
+def trainer_avatar(name, place):
+    accents = {
+        1: ("#e2b84f", "#7fa35a", "#242016"),
+        2: ("#b9b6ff", "#8fa7ff", "#222638"),
+        3: ("#b06b4f", "#e2b84f", "#2c1f1a"),
+    }
+    cap_color, jacket_color, shadow_color = accents.get(place, accents[2])
+    badge = escape(initials(name)[:1])
+
+    return f"""
+        <svg class="trainer-avatar-svg" viewBox="0 0 120 120" role="img" aria-label="Avatar de treinador">
+            <defs>
+                <radialGradient id="trainer-glow-{place}" cx="50%" cy="28%" r="70%">
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.30)" />
+                    <stop offset="52%" stop-color="rgba(226,184,79,0.14)" />
+                    <stop offset="100%" stop-color="rgba(15,16,8,0)" />
+                </radialGradient>
+                <linearGradient id="trainer-jacket-{place}" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="{jacket_color}" />
+                    <stop offset="100%" stop-color="{shadow_color}" />
+                </linearGradient>
+            </defs>
+            <circle cx="60" cy="60" r="58" fill="url(#trainer-glow-{place})" />
+            <path d="M26 105c5-21 18-32 34-32s29 11 34 32" fill="url(#trainer-jacket-{place})" />
+            <path d="M40 97c4-11 11-17 20-17s16 6 20 17" fill="rgba(10,11,8,0.34)" />
+            <circle cx="60" cy="54" r="21" fill="#d8b18b" />
+            <path d="M39 55c2-15 11-24 25-24 11 0 19 7 22 19-9-5-18-7-29-6-8 1-14 4-18 11z" fill="#201912" />
+            <path d="M31 43c12-15 39-20 61-4-14 1-30 4-47 11-5 2-10 0-14-7z" fill="{cap_color}" />
+            <path d="M76 44c10 0 19 3 27 8-10 2-21 1-31-2z" fill="{cap_color}" opacity="0.78" />
+            <circle cx="60" cy="40" r="8" fill="rgba(15,16,8,0.32)" />
+            <circle cx="60" cy="40" r="5" fill="rgba(240,239,255,0.86)" />
+            <text x="60" y="43" text-anchor="middle" font-size="7" font-weight="900" fill="#171207">{badge}</text>
+            <path d="M50 59h.01M70 59h.01" stroke="#18140f" stroke-width="4" stroke-linecap="round" />
+            <path d="M54 68c4 2.6 8 2.6 12 0" fill="none" stroke="#7b4638" stroke-width="2.4" stroke-linecap="round" />
+            <path d="M43 82l17 14 17-14" fill="none" stroke="rgba(240,239,255,0.58)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M35 105h50" stroke="rgba(226,184,79,0.46)" stroke-width="3" stroke-linecap="round" />
+        </svg>
+    """
+
+
 def inject_css(dark_mode):
     palette = {
         "bg": "#0f1008" if dark_mode else "#efe6cf",
@@ -154,6 +193,7 @@ def inject_css(dark_mode):
     .stApp {{
         overflow-x: hidden;
         color: var(--rb-text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background:
             radial-gradient(circle at 12% 0%, rgba(226, 184, 79, 0.13), transparent 28rem),
             radial-gradient(circle at 88% 9%, rgba(127, 163, 90, 0.16), transparent 24rem),
@@ -376,45 +416,83 @@ def inject_css(dark_mode):
     }}
 
     .stat-card {{
+        position: relative;
+        overflow: hidden;
         min-height: 210px;
-        padding: 1.25rem;
+        padding: 1.45rem 1.15rem;
         border: 1px solid var(--rb-border);
         border-radius: 24px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 0.15rem;
         text-align: center;
         background: linear-gradient(160deg, rgba(45,33,24,0.72), rgba(12,13,9,0.48));
         box-shadow: 0 18px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.045);
-        transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }}
+
+    .stat-card::before {{
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at 50% 18%, rgba(226,184,79,0.10), transparent 8.5rem),
+            linear-gradient(180deg, rgba(255,255,255,0.045), transparent 38%);
+        pointer-events: none;
     }}
 
     .stat-card:hover {{
-        transform: translateY(-4px);
+        transform: translateY(-5px);
         border-color: rgba(226,184,79,0.48);
-        box-shadow: 0 24px 70px rgba(0,0,0,0.28), 0 0 38px rgba(226,184,79,0.08);
+        box-shadow: 0 24px 70px rgba(0,0,0,0.30), 0 0 42px rgba(226,184,79,0.10);
     }}
 
     .stat-icon {{
+        position: relative;
+        z-index: 1;
         color: var(--rb-gold);
-        font-size: 2rem;
-        line-height: 1;
-        margin-bottom: 1rem;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 0.92rem;
+        display: grid;
+        place-items: center;
+        border-radius: 18px;
+        border: 1px solid rgba(226,184,79,0.20);
+        background: rgba(226,184,79,0.075);
+        box-shadow: 0 12px 34px rgba(226,184,79,0.10), inset 0 1px 0 rgba(255,255,255,0.08);
+    }}
+
+    .stat-icon svg {{
+        width: 27px;
+        height: 27px;
+        display: block;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }}
 
     .stat-label {{
+        position: relative;
+        z-index: 1;
         color: var(--rb-muted);
-        font-size: 0.72rem;
-        font-weight: 820;
-        letter-spacing: 0.16em;
+        font-size: 0.68rem;
+        font-weight: 850;
+        letter-spacing: 0.17em;
         text-transform: uppercase;
+        max-width: 12.5rem;
+        line-height: 1.45;
     }}
 
     .stat-value {{
-        margin-top: 0.85rem;
+        position: relative;
+        z-index: 1;
+        margin-top: 0.7rem;
         color: var(--rb-text);
-        font-size: clamp(2rem, 3.2vw, 3rem);
+        font-size: clamp(2.1rem, 3.25vw, 3.15rem);
         line-height: 1;
         font-weight: 950;
         letter-spacing: 0;
@@ -491,7 +569,7 @@ def inject_css(dark_mode):
         position: relative;
         overflow: hidden;
         min-height: 218px;
-        padding: 1.18rem 1.1rem;
+        padding: 1.28rem 1.1rem 1.18rem;
         border: 1px solid rgba(214,174,72,0.24);
         border-radius: 28px;
         background:
@@ -499,7 +577,7 @@ def inject_css(dark_mode):
             linear-gradient(155deg, rgba(45,33,24,0.88), rgba(16,15,10,0.68));
         box-shadow: 0 20px 62px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.045);
         text-align: center;
-        transition: transform 170ms ease, border-color 170ms ease;
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
     }}
 
     .podium-card::after {{
@@ -514,8 +592,9 @@ def inject_css(dark_mode):
     }}
 
     .podium-card:hover {{
-        transform: translateY(-4px);
+        transform: translateY(-5px);
         border-color: rgba(226,184,79,0.55);
+        box-shadow: 0 26px 72px rgba(0,0,0,0.30), 0 0 38px rgba(127,163,90,0.08);
     }}
 
     .podium-card.champion {{
@@ -526,12 +605,22 @@ def inject_css(dark_mode):
 
     .podium-crown {{
         position: absolute;
-        top: 0.45rem;
+        top: 0.38rem;
         left: 50%;
         transform: translateX(-50%);
         color: var(--rb-gold);
-        font-size: 2rem;
+        width: 38px;
+        height: 38px;
         text-shadow: 0 0 24px rgba(226,184,79,0.55);
+        filter: drop-shadow(0 0 14px rgba(226,184,79,0.38));
+        z-index: 2;
+    }}
+
+    .podium-crown svg {{
+        width: 100%;
+        height: 100%;
+        display: block;
+        fill: currentColor;
     }}
 
     .podium-medal {{
@@ -550,26 +639,34 @@ def inject_css(dark_mode):
     }}
 
     .podium-avatar {{
-        width: 82px;
-        height: 82px;
-        margin: 0.15rem auto 0.8rem;
+        width: 92px;
+        height: 92px;
+        margin: 0.05rem auto 0.78rem;
         display: grid;
         place-items: center;
         border-radius: 50%;
-        color: #131108;
-        font-size: 1.25rem;
-        font-weight: 950;
         border: 3px solid rgba(226,184,79,0.65);
         background:
-            radial-gradient(circle at 34% 28%, #fff5b9 0 10%, transparent 11%),
-            linear-gradient(145deg, var(--rb-blue), var(--rb-gold));
-        box-shadow: 0 16px 42px rgba(0,0,0,0.32);
+            radial-gradient(circle at 42% 18%, rgba(255,255,255,0.26), transparent 28%),
+            linear-gradient(145deg, rgba(143,167,255,0.42), rgba(226,184,79,0.24) 48%, rgba(127,163,90,0.28));
+        box-shadow: 0 16px 42px rgba(0,0,0,0.34), 0 0 24px rgba(226,184,79,0.13), inset 0 1px 0 rgba(255,255,255,0.18);
+        overflow: hidden;
+        position: relative;
+        z-index: 1;
+    }}
+
+    .podium-avatar svg {{
+        width: 100%;
+        height: 100%;
+        display: block;
     }}
 
     .champion .podium-avatar {{
-        width: 98px;
-        height: 98px;
-        margin-top: 1.2rem;
+        width: 110px;
+        height: 110px;
+        margin-top: 1.38rem;
+        border-color: rgba(226,184,79,0.86);
+        box-shadow: 0 20px 54px rgba(0,0,0,0.38), 0 0 34px rgba(226,184,79,0.23), inset 0 1px 0 rgba(255,255,255,0.2);
     }}
 
     .podium-name {{
@@ -619,6 +716,134 @@ def inject_css(dark_mode):
         padding: clamp(0.85rem, 1.8vw, 1.15rem);
         background: linear-gradient(150deg, rgba(26,25,18,0.62), rgba(15,16,8,0.36));
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }}
+
+    .ranking-toggles,
+    .st-key-filter_toggle_bar {{
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 14px;
+        flex-wrap: wrap;
+        width: 100%;
+        margin: -0.35rem 0 0.7rem;
+        overflow: visible;
+    }}
+
+    .st-key-filter_toggle_bar > [data-testid="stHorizontalBlock"],
+    .st-key-filter_toggle_bar > div > [data-testid="stHorizontalBlock"],
+    .st-key-filter_toggle_bar > div > div > [data-testid="stHorizontalBlock"] {{
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 14px;
+        flex-wrap: wrap;
+        width: 100%;
+        overflow: visible;
+    }}
+
+    .st-key-filters_panel [data-testid="stHorizontalBlock"] {{
+        align-items: flex-end;
+    }}
+
+    .st-key-filter_states [data-testid="stWidgetLabel"] {{
+        text-align: center;
+    }}
+
+    .st-key-filter_states [data-testid="stWidgetLabel"] p {{
+        text-align: center;
+        width: 100%;
+    }}
+
+    .st-key-filter_states div[data-testid="stButtonGroup"] {{
+        justify-content: center;
+    }}
+
+    .toggle-pill,
+    .st-key-filter_switch_mean,
+    .st-key-filter_switch_monthly {{
+        flex: 0 0 auto;
+        flex-shrink: 0;
+        width: auto;
+        min-width: 180px;
+        min-height: 46px;
+        padding: 10px 18px;
+        border: 1px solid rgba(226,184,79,0.22);
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        overflow-wrap: normal;
+        word-break: keep-all;
+        background: rgba(255,255,255,0.035);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+        transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+    }}
+
+    .st-key-filter_switch_mean > div,
+    .st-key-filter_switch_monthly > div {{
+        width: auto !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        flex: 0 0 auto !important;
+        overflow: visible !important;
+    }}
+
+    .st-key-filter_switch_mean [data-testid="stToggle"],
+    .st-key-filter_switch_monthly [data-testid="stToggle"] {{
+        width: auto !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        flex: 0 0 auto !important;
+        flex-shrink: 0 !important;
+        overflow: visible !important;
+        white-space: nowrap !important;
+    }}
+
+    .st-key-filter_switch_mean label,
+    .st-key-filter_switch_monthly label {{
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        width: auto !important;
+        min-width: max-content !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }}
+
+    .st-key-filter_switch_mean [data-testid="stWidgetLabel"],
+    .st-key-filter_switch_monthly [data-testid="stWidgetLabel"] {{
+        width: auto !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        flex: 0 0 auto !important;
+        overflow: visible !important;
+        white-space: nowrap !important;
+    }}
+
+    .st-key-filter_switch_mean:hover,
+    .st-key-filter_switch_monthly:hover {{
+        border-color: rgba(127,163,90,0.46);
+        background: rgba(127,163,90,0.085);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.16), 0 0 24px rgba(127,163,90,0.06);
+    }}
+
+    .st-key-filter_switch_mean [data-testid="stWidgetLabel"] p,
+    .st-key-filter_switch_monthly [data-testid="stWidgetLabel"] p {{
+        font-size: 0.78rem;
+        font-weight: 820;
+        color: var(--rb-text) !important;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: keep-all;
+        line-height: 1.2;
     }}
 
     .st-key-state_sort_control {{
@@ -778,23 +1003,24 @@ def inject_css(dark_mode):
 
     .state-grid {{
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 0.9rem;
     }}
 
     .state-card {{
         min-height: 172px;
-        padding: 0.94rem;
+        padding: 1rem;
         border: 1px solid var(--rb-border);
         border-radius: 21px;
         background: linear-gradient(155deg, rgba(45,33,24,0.72), rgba(15,16,8,0.48));
         box-shadow: 0 16px 44px rgba(0,0,0,0.18);
-        transition: transform 160ms ease, border-color 160ms ease;
+        transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
     }}
 
     .state-card:hover {{
-        transform: translateY(-3px);
+        transform: translateY(-4px);
         border-color: rgba(127,163,90,0.48);
+        box-shadow: 0 20px 54px rgba(0,0,0,0.23), 0 0 28px rgba(127,163,90,0.08);
     }}
 
     .state-top {{
@@ -812,37 +1038,67 @@ def inject_css(dark_mode):
     }}
 
     .state-position {{
-        padding: 0.25rem 0.46rem;
+        padding: 0.26rem 0.55rem;
         border-radius: 999px;
         color: var(--rb-green);
         background: rgba(127,163,90,0.12);
         border: 1px solid rgba(127,163,90,0.18);
-        font-size: 0.66rem;
+        font-size: 0.7rem;
         font-weight: 900;
         white-space: nowrap;
+        line-height: 1;
     }}
 
     .state-metrics {{
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.56rem;
-        margin-top: 0.85rem;
+        gap: clamp(0.62rem, 1vw, 0.9rem);
+        margin-top: 1rem;
+    }}
+
+    .state-metrics > div {{
+        min-width: 0;
+        padding: 0.52rem 0.58rem;
+        border: 1px solid rgba(240,218,159,0.075);
+        border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.025);
+        text-align: center;
+        box-sizing: border-box;
     }}
 
     .mini-label {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: fit-content;
+        min-width: 72px;
+        max-width: 100%;
+        padding: 0 0.72rem;
+        box-sizing: border-box;
         color: var(--rb-muted);
-        font-size: 0.58rem;
+        font-size: 0.55rem;
         font-weight: 850;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.11em;
         text-transform: uppercase;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: keep-all;
     }}
 
     .mini-value {{
-        margin-top: 0.22rem;
+        margin-top: 0.3rem;
         color: var(--rb-text);
-        font-size: 0.82rem;
+        font-size: 0.86rem;
+        line-height: 1.1;
         font-weight: 900;
-        overflow-wrap: anywhere;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: keep-all;
     }}
 
     .state-best {{
@@ -978,6 +1234,27 @@ def inject_css(dark_mode):
         color: var(--rb-text);
     }}
 
+    .creator-line {{
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        margin-top: 0.22rem;
+        color: var(--rb-muted);
+    }}
+
+    .creator-mark {{
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        color: #171207;
+        background: linear-gradient(145deg, #f0cc67, var(--rb-gold));
+        font-size: 0.72rem;
+        font-weight: 950;
+        box-shadow: 0 0 18px rgba(226,184,79,0.18);
+    }}
+
     label, .stMarkdown, .stTextInput label, .stMultiSelect label {{
         color: var(--rb-text) !important;
     }}
@@ -1072,10 +1349,32 @@ def inject_css(dark_mode):
 
         .stat-card {{
             min-height: 154px;
+            padding: 1.15rem 1rem;
+        }}
+
+        .stat-icon {{
+            width: 44px;
+            height: 44px;
+            margin-bottom: 0.75rem;
+        }}
+
+        .stat-icon svg {{
+            width: 25px;
+            height: 25px;
         }}
 
         .podium-card.champion {{
             order: -1;
+        }}
+
+        .podium-avatar {{
+            width: 88px;
+            height: 88px;
+        }}
+
+        .champion .podium-avatar {{
+            width: 104px;
+            height: 104px;
         }}
 
         .section-head {{
@@ -1090,6 +1389,30 @@ def inject_css(dark_mode):
         .st-key-chart_panel [data-testid="stHorizontalBlock"],
         .st-key-states_section [data-testid="stHorizontalBlock"] {{
             flex-wrap: wrap;
+        }}
+
+        .ranking-toggles,
+        .st-key-filter_toggle_bar {{
+            justify-content: flex-start;
+            margin: -0.1rem 0 0.65rem;
+        }}
+
+        .st-key-filter_toggle_bar > [data-testid="stHorizontalBlock"],
+        .st-key-filter_toggle_bar > div > [data-testid="stHorizontalBlock"],
+        .st-key-filter_toggle_bar > div > div > [data-testid="stHorizontalBlock"] {{
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            width: 100%;
+            overflow: visible;
+        }}
+
+        .st-key-filter_switch_mean,
+        .st-key-filter_switch_monthly {{
+            min-width: 180px;
+        }}
+
+        .st-key-filter_states div[data-testid="stButtonGroup"] {{
+            justify-content: flex-start;
         }}
 
         .st-key-state_sort_control {{
@@ -1128,9 +1451,54 @@ def inject_css(dark_mode):
             width: 100%;
         }}
 
+        .stat-card {{
+            min-height: 148px;
+        }}
+
+        .stat-value {{
+            font-size: clamp(1.85rem, 11vw, 2.55rem);
+        }}
+
         .state-grid,
         .range-grid {{
             grid-template-columns: 1fr;
+        }}
+
+        .state-card {{
+            padding: 0.9rem;
+        }}
+
+        .state-metrics {{
+            gap: 0.44rem;
+        }}
+
+        .state-metrics > div {{
+            padding: 0.44rem 0.22rem;
+            border-radius: 12px;
+        }}
+
+        .mini-label {{
+            font-size: 0.48rem;
+            letter-spacing: 0.06em;
+            min-width: 64px;
+            padding: 0 0.42rem;
+        }}
+
+        .mini-value {{
+            font-size: 0.78rem;
+        }}
+
+        .st-key-filter_switch_mean,
+        .st-key-filter_switch_monthly {{
+            width: auto;
+            min-width: 180px;
+            min-height: 44px;
+            padding: 9px 16px;
+        }}
+
+        .st-key-filter_switch_mean [data-testid="stToggle"],
+        .st-key-filter_switch_monthly [data-testid="stToggle"] {{
+            min-width: max-content;
         }}
 
         .bar-chart {{
@@ -1223,17 +1591,40 @@ def render_hero(base, historical_data):
                 </div>
                 <div class="hero-stat-grid">
                     <article class="stat-card">
-                        <div class="stat-icon">●●</div>
+                        <div class="stat-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                        </div>
                         <div class="stat-label">Jogadores monitorados</div>
                         <div class="stat-value">{format_int(jogadores)}</div>
                     </article>
                     <article class="stat-card">
-                        <div class="stat-icon">◎</div>
+                        <div class="stat-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="9" />
+                                <circle cx="12" cy="12" r="4" />
+                                <path d="M12 3v3" />
+                                <path d="M12 18v3" />
+                                <path d="M3 12h3" />
+                                <path d="M18 12h3" />
+                            </svg>
+                        </div>
                         <div class="stat-label">Capturas analisadas</div>
                         <div class="stat-value">{format_compact(capturas)}</div>
                     </article>
                     <article class="stat-card">
-                        <div class="stat-icon">◇</div>
+                        <div class="stat-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z" />
+                                <path d="M9 4v13" />
+                                <path d="M15 7v13" />
+                                <circle cx="17" cy="8" r="1.8" />
+                            </svg>
+                        </div>
                         <div class="stat-label">Estados representados</div>
                         <div class="stat-value">{format_int(estados)}</div>
                     </article>
@@ -1246,12 +1637,20 @@ def render_hero(base, historical_data):
 def podium_card(row, place):
     medal_labels = {1: "1", 2: "2", 3: "3"}
     class_name = "podium-card champion" if place == 1 else "podium-card"
-    crown = '<div class="podium-crown">♛</div>' if place == 1 else ""
+    crown = """
+        <div class="podium-crown" aria-hidden="true">
+            <svg viewBox="0 0 64 64">
+                <path d="M8 24l13 12 11-24 11 24 13-12-6 28H14L8 24z" />
+                <path d="M16 56h32" stroke="currentColor" stroke-width="5" stroke-linecap="round" />
+            </svg>
+        </div>
+    """ if place == 1 else ""
+    avatar = trainer_avatar(row["nickname"], place)
     return f"""
         <article class="{class_name}">
             {crown}
             <div class="podium-medal">{medal_labels[place]}</div>
-            <div class="podium-avatar">{escape(initials(row["nickname"]))}</div>
+            <div class="podium-avatar">{avatar}</div>
             <div class="podium-name">{escape(str(row["nickname"]))}</div>
             <div class="podium-state">{escape(str(row["state"]))}</div>
             <div class="podium-catches">{format_int(row["catches"])}</div>
@@ -1437,23 +1836,30 @@ def render_paginated_table(title, data, key):
 def render_filters(data):
     states = sorted(data["state"].dropna().astype(str).unique())
 
+    with st.container(
+        key="filter_toggle_bar",
+        horizontal=True,
+        horizontal_alignment="right",
+        vertical_alignment="center",
+        gap="small",
+    ):
+        with st.container(key="filter_switch_mean", width="content"):
+            somente_melhor = st.toggle("Melhor média", value=False)
+        with st.container(key="filter_switch_monthly", width="content"):
+            apenas_mensais = st.toggle("Apenas mensais", value=False)
+
     with st.container(key="filters_panel"):
-        search_col, states_col = st.columns([0.28, 0.72], vertical_alignment="bottom")
+        search_col, states_col = st.columns([0.30, 0.70], vertical_alignment="bottom")
         with search_col:
             search = st.text_input("Buscar por nickname", placeholder="⌕ Buscar por nickname")
         with states_col:
-            selected_states = st.pills(
-                "Filtrar por estado",
-                states,
-                selection_mode="multi",
-                default=[],
-            )
-
-        _, switch_col_1, switch_col_2 = st.columns([0.58, 0.21, 0.21])
-        with switch_col_1:
-            somente_melhor = st.toggle("Melhor média", value=False)
-        with switch_col_2:
-            apenas_mensais = st.toggle("Apenas mensais", value=False)
+            with st.container(key="filter_states"):
+                selected_states = st.pills(
+                    "Filtrar por estado",
+                    states,
+                    selection_mode="multi",
+                    default=[],
+                )
 
     filtered = data
     if search:
@@ -1511,7 +1917,7 @@ def render_state_cards(stats):
             <article class="state-card">
                 <div class="state-top">
                     <div class="state-uf">{escape(str(row["Estado"]))}</div>
-                    <div class="state-position">#{int(row["Posição"])} no BR</div>
+                    <div class="state-position">#{int(row["Posição"])}</div>
                 </div>
                 <div class="state-metrics">
                     <div>
@@ -1584,6 +1990,7 @@ def render_footer():
             <div>
                 <strong>Ranking BR · Pokémon GO</strong><br>
                 Feito com orgulho pela comunidade brasileira.
+                <br><span class="creator-line"><span class="creator-mark">E</span>feito por Enzo Sartorelli</span>
             </div>
             <div>© 2026 Ranking BR. Não afiliado à Niantic, Inc.</div>
         </footer>
@@ -1652,451 +2059,3 @@ with st.container(key="ranges_section"):
         render_distribution(build_distribution(filtered_base))
 
 render_footer()
-=======
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-from utils.load_data import load_data
-
-# ======================
-# CONFIG
-# ======================
-st.set_page_config(layout="wide")
-
-# ======================
-# CSS
-# ======================
-st.markdown("""
-<style>
-
-/* ================= HEADER ================= */
-.header-container {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 60px;
-}
-
-.header-box {
-    background: linear-gradient(135deg,#fff3b0,#ffe082);
-    padding: 18px 28px;
-    border-radius: 18px;
-    box-shadow: 0px 6px 18px rgba(0,0,0,0.25);
-}
-
-.header-title {
-    font-size: 34px;
-    font-weight: 800;
-    color: #5c4a00;
-}
-
-.header-sub {
-    color: #7a6500;
-    margin-left: 10px;
-}
-
-/* ================= TITULO PODIO ================= */
-.podium-title {
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-.podium-title span {
-    display: inline-block;
-    padding: 10px 24px;
-    border-radius: 16px;
-    background: #2e7d32;
-    color: white;
-    font-weight: 700;
-    font-size: 20px;
-}
-
-/* ================= PODIO ================= */
-.podium-container {
-    display: flex;
-    justify-content: center;
-    overflow-x: auto;          /* ✅ permite scroll */
-    padding-bottom: 10px;
-}
-
-/* container real */
-.podium {
-    display: flex;
-    gap: 16px;
-    align-items: flex-end;
-    min-width: 650px;          /* ✅ força largura mínima */
-}
-
-.podium {
-    display: flex;
-    gap: 16px;
-    align-items: flex-end;
-}
-
-/* BLOCO */
-.block {
-    width: 130px;
-    padding: 12px;
-    border-radius: 18px 18px 0 0;
-    text-align: center;
-    font-weight: bold;
-    font-size: 16px;
-
-    /* ✅ CONTRASTE GARANTIDO */
-    color: #1a1a1a;
-
-    /* ✅ CONTORNO */
-    text-shadow:
-        0px 1px 0px rgba(255,255,255,0.6),
-        0px 0px 4px rgba(0,0,0,0.4);
-
-    transition: 0.25s;
-}
-
-/* ALTURA + CORES */
-.first  { height: 210px; background: #d4edda; color:#1b5e20 !important;}
-.second { height: 170px; background: #e8f5e9; color:#1b5e20 !important;}
-.third  { height: 150px; background: #fff9c4; color:#8a5a00 !important;}
-.fourth { height: 130px; background: #e3f2fd; color:#0d47a1 !important;}
-.fifth  { height: 120px; background: #f1f8e9; color:#33691e !important;}
-
-/* HOVER */
-.block:hover {
-    transform: translateY(-6px) scale(1.03);
-}
-
-/* ================= NOMES ================= */
-.player {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    margin-top: 10px;
-}
-
-.player span {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    min-width: 110px;
-    text-align: center;
-
-    padding: 6px 14px;
-    border-radius: 12px;
-
-    background: rgba(255,255,255,0.9);
-    color: #111;
-
-    font-weight: 600;
-
-    /* efeito moderno */
-    box-shadow: 0px 3px 8px rgba(0,0,0,0.2);
-}
-
-/* DARK MODE */
-@media (prefers-color-scheme: dark) {
-    .player span {
-        background: rgba(200,200,200,0.2);
-        color: white;
-    }
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ======================
-# DATA
-# ======================
-@st.cache_data
-def get_data():
-    return load_data()
-
-df = get_data()
-
-# ======================
-# HEADER
-# ======================
-st.markdown(
-'<div class="header-container"><div class="header-box">'
-'<span class="header-title">Dashboard de Jogadores PoGo</span>'
-'<span class="header-sub">by Enzo Sartorelli</span>'
-'</div></div>', unsafe_allow_html=True
-)
-
-# ======================
-# PODIO
-# ======================
-idx = df.groupby("id_jogador")["catches"].idxmax()
-ranking_podio = df.loc[idx][["nickname","catches"]].sort_values("catches", ascending=False).head(5).reset_index(drop=True)
-
-visual_order = [3,1,0,2,4]
-classes_map = {0:"first",1:"second",2:"third",3:"fourth",4:"fifth"}
-medals = {0:"🥇",1:"🥈",2:"🥉",3:"🏅",4:"🏅"}
-
-html = '<div class="podium-container"><div class="podium">'
-
-for pos in visual_order:
-    if pos >= len(ranking_podio): continue
-    row = ranking_podio.iloc[pos]
-    val = f"{int(row['catches']):,}".replace(",", ".")
-
-    html += f'<div><div class="block {classes_map[pos]}">{medals[pos]}<br>#{pos+1}<br>{val}</div>'
-    html += f'<div class="player"><span>{row["nickname"]}</span></div></div>'
-
-html += '</div></div>'
-st.markdown(html, unsafe_allow_html=True)
-
-st.divider()
-
-# ======================
-# GRAFICO
-# ======================
-st.subheader("📊 Comparação entre Jogadores")
-
-players_selected = st.multiselect(
-    "Selecione até 8 jogadores",
-    sorted(df["nickname"].unique()),
-    max_selections=8
-)
-
-if players_selected:
-    fig = go.Figure()
-    cores = ["#00E676","#69F0AE","#00C853","#18FFFF","#40C4FF","#FFD740","#FFAB00","#FF6F00"]
-
-    for i, player in enumerate(players_selected):
-        df_p = df[df["nickname"]==player].sort_values("date")
-
-        fig.add_trace(go.Scatter(
-            x=df_p["date"],
-            y=df_p["catches"],
-            mode="lines+markers",
-            name=player,
-            line=dict(width=4,color=cores[i%len(cores)],shape="spline")
-        ))
-
-    fig.update_layout(template="plotly_dark",height=520,hovermode="x unified")
-    st.plotly_chart(fig, use_container_width=True)
-
-# ======================
-# FILTROS
-# ======================
-st.divider()
-st.subheader("🎯 Filtros")
-
-col1,col2,col3,col4 = st.columns([2,2,1,1])
-
-states = sorted(df["state"].dropna().unique())
-
-with col1:
-    selected_states = st.multiselect("📍 Estado", states)
-
-df_filtered = df.copy()
-
-if selected_states:
-    df_filtered = df_filtered[df_filtered["state"].isin(selected_states)]
-
-players = sorted(df_filtered["nickname"].unique())
-
-with col2:
-    selected_players = st.multiselect("👤 Jogadores", players)
-
-if selected_players:
-    df_filtered = df_filtered[df_filtered["nickname"].isin(selected_players)]
-
-with col3:
-    somente_melhor = st.checkbox("🏆 Melhor média")
-
-with col4:
-    apenas_mensais = st.checkbox("📅 Apenas mensais")
-
-df = df_filtered
-
-# ======================
-# RANKINGS
-# ======================
-col1,col2 = st.columns(2)
-
-with col1:
-    st.subheader("🏆 Maior Captura por Jogador")
-
-    idx = df.groupby("id_jogador")["catches"].idxmax()
-
-    ranking = df.loc[idx][["nickname","state","catches","date"]]
-    ranking = ranking.sort_values("catches", ascending=False)
-
-    ranking["Ranking"] = range(1, len(ranking)+1)
-    ranking["Catches"] = ranking["catches"].apply(lambda x: f"{int(x):,}".replace(",", "."))
-    ranking["Data"] = pd.to_datetime(ranking["date"]).dt.date
-
-    ranking = ranking[["Ranking","nickname","state","Catches","Data"]]
-    ranking.columns = ["Ranking","Jogador","Estado","Catches","Data"]
-
-    st.dataframe(ranking, use_container_width=True, height=500, hide_index=True)
-
-with col2:
-    st.subheader("📈 Maior Média Diária")
-
-    resultados = []
-
-    for id_jogador, group in df.groupby("id_jogador"):
-        group = group.sort_values("date").reset_index(drop=True)
-
-        if len(group) < 2:
-            continue
-
-        nome = group["nickname"].iloc[-1]
-        estado = group["state"].iloc[0]
-
-        for i in range(len(group)):
-            for j in range(i+1, len(group)):
-
-                d1 = group.loc[i, "date"]
-                d2 = group.loc[j, "date"]
-
-                c1 = group.loc[i, "catches"]
-                c2 = group.loc[j, "catches"]
-
-                dias = (d2 - d1).days
-                ganho = c2 - c1
-
-                if dias <= 0 or ganho <= 0:
-                    continue
-
-                if apenas_mensais and dias > 32:
-                    continue
-
-                media = ganho / dias
-
-                resultados.append({
-                    "nickname": nome,
-                    "state": estado,
-                    "media": int(media),
-                    "data_inicial": d1.date(),
-                    "data_final": d2.date(),
-                    "dias": dias,
-                    "catches_periodo": ganho
-                })
-
-    df_media = pd.DataFrame(resultados)
-
-    if not df_media.empty:
-
-        if somente_melhor:
-            df_media = df_media.sort_values("media", ascending=False) \
-                               .groupby("nickname") \
-                               .head(1)
-
-        df_media = df_media.sort_values("media", ascending=False)
-
-        df_media["ranking"] = range(1, len(df_media)+1)
-
-        df_media = df_media[[
-            "ranking","nickname","state","media",
-            "data_inicial","data_final","dias","catches_periodo"
-        ]]
-
-        df_media.columns = [
-            "Ranking","Jogador","Estado","Média",
-            "Data Inicial","Data Final","Dias","Catches no Período"
-        ]
-
-        st.dataframe(df_media, use_container_width=True, height=500, hide_index=True)
-
-# ======================
-# 📊 Estatísticas Gerais
-# ======================
-st.divider()
-st.subheader("📊 Estatísticas Gerais")
-
-idx = df.groupby("id_jogador")["catches"].idxmax()
-
-base = df.loc[idx][["id_jogador","nickname","state","catches"]]
-
-base = base.sort_values("catches", ascending=False)
-base["position"] = range(1, len(base)+1)
-
-# KPIs
-c1, c2, c3, c4 = st.columns(4)
-
-c1.metric("Estados", base["state"].nunique())
-c2.metric("Jogadores", base["id_jogador"].nunique())
-c3.metric("Soma Top", f"{int(base['catches'].sum()):,}".replace(",", "."))
-c4.metric("Soma Total", f"{int(df['catches'].sum()):,}".replace(",", "."))
-
-# ======================
-# 📊 TABELA POR ESTADO (COMPLETA)
-# ======================
-dados = []
-total = len(base)
-
-for estado, group in base.groupby("state"):
-
-    qtd = len(group)
-    perc = qtd / total
-
-    avg_catch = group["catches"].mean()
-    avg_pos = group["position"].mean()
-    best_pos = group["position"].min()
-
-    best_player = group.loc[group["position"].idxmin(),"nickname"]
-
-    dados.append({
-        "Estado": estado,
-        "Qtd Jogadores": qtd,
-        "%": f"{perc:.0%}",
-        "Média Catches": int(avg_catch),
-        "Média Ranking": round(avg_pos, 2),
-        "Melhor Ranking": f"{best_pos} 👤 {best_player}"
-    })
-
-df_estado = pd.DataFrame(dados)
-
-df_estado = df_estado.sort_values("Estado")
-
-df_estado["Média Catches"] = df_estado["Média Catches"].apply(
-    lambda x: f"{x:,}".replace(",", ".")
-)
-
-st.dataframe(df_estado, use_container_width=True, height=400, hide_index=True)
-
-# ======================
-# DISTRIBUIÇÃO (ATUALIZADA)
-# ======================
-st.divider()
-st.subheader("📊 Distribuição de Jogadores por Faixa de Catches")
-
-faixas = [
-    300000, 400000, 500000, 600000, 700000, 800000, 900000,
-    1000000, 1100000, 1200000, 1300000, 1400000,
-    1500000, 1750000, 2000000, 2250000, 2500000,
-    2750000, 3000000
-]
-
-resultados = []
-
-for i in range(len(faixas)-1):
-
-    inferior = faixas[i]
-    superior = faixas[i+1]
-
-    faixa_df = base[
-        (base["catches"] >= inferior) &
-        (base["catches"] < superior)
-    ]
-
-    acima_df = base[base["catches"] >= superior]
-
-    resultados.append({
-        "Faixa": f"{inferior:,} - {superior:,}".replace(",", "."),
-        "Jogadores na Faixa": len(faixa_df),
-        "Jogadores Acima": len(acima_df)
-    })
-
-df_faixas = pd.DataFrame(resultados)
-
-st.dataframe(
-    df_faixas,
-    use_container_width=True,
-    hide_index=True,
-    height=450
-)
->>>>>>> 8de7978d80c81cd9934320adbf1ebd3395b7fa29
