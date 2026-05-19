@@ -30,27 +30,30 @@ def get_database_fingerprint():
     if not ok:
         return ("database", True, "unavailable")
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    COUNT(*) AS registros,
-                    COALESCE(MAX(updated_at), 'epoch'::timestamptz) AS max_registro_updated_at,
-                    COALESCE(MAX(data_referencia), 'epoch'::date) AS max_data_referencia
-                FROM registros_periodicos
-                """
-            )
-            registros = cur.fetchone()
-            cur.execute(
-                """
-                SELECT
-                    COUNT(*) AS jogadores,
-                    COALESCE(MAX(updated_at), 'epoch'::timestamptz) AS max_jogador_updated_at
-                FROM jogadores
-                """
-            )
-            jogadores = cur.fetchone()
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS registros,
+                        COALESCE(MAX(updated_at), 'epoch'::timestamptz) AS max_registro_updated_at,
+                        COALESCE(MAX(data_referencia), 'epoch'::date) AS max_data_referencia
+                    FROM registros_periodicos
+                    """
+                )
+                registros = cur.fetchone()
+                cur.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS jogadores,
+                        COALESCE(MAX(updated_at), 'epoch'::timestamptz) AS max_jogador_updated_at
+                    FROM jogadores
+                    """
+                )
+                jogadores = cur.fetchone()
+    except Exception:
+        return ("database", True, "metadata-unavailable")
 
     return (
         "database",

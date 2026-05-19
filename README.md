@@ -69,13 +69,24 @@ Exemplo seguro para `st.secrets` no Streamlit Cloud:
 ```toml
 DATABASE_URL = "postgresql://postgres:SUA_SENHA@db.seu-projeto.supabase.co:5432/postgres"
 DATA_SOURCE = "database"
-ENABLE_ADMIN = "true"
+ENABLE_ADMIN = "false"
 ADMIN_PASSWORD = "SUA_SENHA_ADMIN_FORTE"
 ```
 
 ## Como preparar o banco
 
 Execute o schema em `database/schema.sql` no PostgreSQL/Supabase.
+
+Para bancos ja existentes, execute tambem:
+
+```sql
+\i database/migrations/001_production_hardening.sql
+```
+
+No Supabase, cole o conteudo desse arquivo no SQL Editor. A migration troca a
+duplicidade global por indice unico parcial: apenas registros `pendente` e
+`validado` bloqueiam nova submissao para o mesmo jogador, tipo e data. Registros
+`rejeitado` continuam no historico/auditoria.
 
 Depois, importe o Excel legado:
 
@@ -130,8 +141,9 @@ salva como registro `pendente` para revisao/processamento.
 
 ## Envio publico de dados
 
-O formulario publico fica separado do dashboard principal. Ele aparece no
-sidebar como `Enviar dados` e tambem pode ser aberto com `?page=enviar-dados`.
+O formulario publico fica separado do dashboard principal. Ele aparece na
+navegacao lateral como `Enviar dados` e tambem pode ser aberto com
+`?page=enviar-dados`.
 
 Esse fluxo so funciona em modo banco:
 
@@ -143,9 +155,10 @@ python -m streamlit run app.py
 Campos do envio publico:
 
 - nickname
-- estado
+- estado (UF)
 - data do registro
 - total de capturas
+- contato opcional
 - observacao opcional
 
 Todo envio publico entra obrigatoriamente como `pendente`. O jogador nao escolhe
@@ -163,7 +176,7 @@ Fluxo completo:
 
 ## Area administrativa no Streamlit
 
-A area admin e opcional e fica escondida por padrao. Para ativar, configure no
+A area admin e opcional e nao aparece quando `ENABLE_ADMIN=false`. Para ativar, configure no
 arquivo `.env` local:
 
 ```txt
@@ -173,8 +186,8 @@ ADMIN_PASSWORD=uma_senha_forte
 
 Nao coloque `ADMIN_PASSWORD` no Git. O arquivo `.env` ja esta no `.gitignore`.
 
-Com o app rodando em modo banco, abra a sidebar do Streamlit e expanda `Admin`.
-Digite a senha e preencha:
+Com o app rodando em modo banco, abra `Admin` na navegacao lateral. Digite a
+senha e preencha:
 
 - nickname
 - estado
@@ -248,6 +261,7 @@ Antes de publicar, rode:
 ```powershell
 python -m unittest discover -s tests
 python scripts/production_check.py
+python scripts/test_database_connection.py
 ```
 
 O `production_check.py` verifica:
@@ -260,6 +274,8 @@ O `production_check.py` verifica:
 - existencia de pelo menos um registro `validado`;
 - se `.env` nao esta versionado;
 - se `.env.example` parece seguro.
+- se nao ha duplicidade ativa por jogador/data/tipo.
+- se a migration de indice unico parcial ja foi aplicada ao banco.
 
 ## Testes
 

@@ -18,6 +18,7 @@ from src.metrics.states import build_state_stats as compute_state_stats
 from src.services.data_source import get_data_source_fingerprint, load_dashboard_data
 from src.services.admin_review import approve_record, list_pending_records, reject_record, update_pending_record
 from src.services.submissions import submit_player_record
+from src.validation.submissions import BRAZILIAN_STATES
 
 
 st.set_page_config(
@@ -26,6 +27,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+MAX_CATCHES_INPUT = 9_999_999_999
 
 
 @st.cache_data(show_spinner=False, ttl=300)
@@ -71,32 +75,60 @@ def clear_dashboard_caches():
     build_distribution.clear()
 
 
+def render_feedback(result, success_message, info_message=None):
+    if not result:
+        return
+    if result.get("success"):
+        st.success(success_message)
+        if info_message:
+            st.info(info_message)
+        return
+    st.error("; ".join(result.get("errors", ["Não foi possível concluir a ação."])))
+
+
 def render_public_submission_page():
-    st.title("Enviar dados")
-    st.caption("Envie seu registro para revisao. Ele so aparece no ranking depois da aprovacao do admin.")
+    ui_html("""
+        <section class="page-hero submission-hero">
+            <div class="eyebrow">Envio público</div>
+            <h1 class="page-title">Enviar dados</h1>
+            <p class="page-copy">
+                Registros enviados pelo público entram como pendentes e só aparecem no ranking
+                depois da revisão administrativa.
+            </p>
+        </section>
+    """)
 
     if DATA_SOURCE != "database":
-        st.warning("Envio publico indisponivel no modo Excel. Ative DATA_SOURCE=database para usar este formulario.")
+        st.warning("Envio público indisponível no modo Excel. Ative DATA_SOURCE=database para usar este formulário.")
         return
     if not has_database_config():
-        st.warning("Envio publico indisponivel: banco de dados nao configurado.")
+        st.warning("Envio público indisponível: banco de dados não configurado.")
         return
 
-    last_result = st.session_state.pop("public_submission_result", None)
-    if last_result:
-        if last_result.get("success"):
-            st.success("Registro enviado para revisao.")
-            st.info("O envio ficou como pendente. Depois da aprovacao do admin, ele entra no dashboard.")
-        else:
-            st.error("; ".join(last_result.get("errors", ["Nao foi possivel enviar o registro."])))
+    render_feedback(
+        st.session_state.pop("public_submission_result", None),
+        "Registro enviado para revisão.",
+        "O envio ficou como pendente. Depois da aprovação do admin, ele entra no dashboard.",
+    )
 
-    with st.form("public_submission_form", clear_on_submit=True):
-        nickname = st.text_input("Nickname")
-        state = st.text_input("Estado")
-        data_referencia = st.date_input("Data do registro", value=date.today())
-        catches = st.number_input("Total de capturas", min_value=1, step=1)
-        observacao = st.text_area("Observacao opcional", max_chars=500)
-        submitted = st.form_submit_button("Enviar para revisao")
+    with st.container(key="public_submission_shell"):
+        with st.form("public_submission_form", clear_on_submit=True):
+            left, right = st.columns([0.58, 0.42], vertical_alignment="top")
+            with left:
+                nickname = st.text_input("Nickname", max_chars=80, placeholder="Seu nickname no jogo")
+                data_referencia = st.date_input("Data do registro", value=date.today(), max_value=date.today())
+                catches = st.number_input(
+                    "Total de capturas",
+                    min_value=1,
+                    max_value=MAX_CATCHES_INPUT,
+                    step=1,
+                    format="%d",
+                )
+            with right:
+                state = st.selectbox("Estado (UF)", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"))
+                contato = st.text_input("Contato opcional", max_chars=120, placeholder="Email, WhatsApp ou @")
+                observacao = st.text_area("Observação opcional", max_chars=500, height=126)
+            submitted = st.form_submit_button("Enviar para revisão", type="primary")
 
     if submitted:
         result = submit_player_record({
@@ -108,84 +140,115 @@ def render_public_submission_page():
             "status": "pendente",
             "fonte": "site",
             "observacao": observacao,
+            "contato_envio": contato,
         })
         st.session_state.public_submission_result = result
         st.rerun()
 
 
-def render_admin_sidebar():
+def render_admin_page():
     if not ENABLE_ADMIN or not ADMIN_PASSWORD:
         return
 
-    with st.sidebar.expander("Admin", expanded=False):
-        last_result = st.session_state.pop("admin_last_result", None)
-        if last_result:
-            if last_result.get("success"):
-                if "jogador_criado" in last_result:
-                    acao = "criado" if last_result.get("jogador_criado") else "encontrado"
-                    st.success(
-                        f"Registro inserido. Jogador {acao}. "
-                        f"ID jogador: {last_result.get('jogador_id')} | "
-                        f"ID registro: {last_result.get('record_id')} | "
-                        f"Status: {last_result.get('status')}"
+    ui_html("""
+        <section class="page-hero admin-hero">
+            <div class="eyebrow">Área protegida</div>
+            <h1 class="page-title">Admin</h1>
+            <p class="page-copy">
+                Inclusão manual, revisão de pendentes e auditoria operacional dos registros.
+            </p>
+        </section>
+    """)
+
+    last_result = st.session_state.pop("admin_last_result", None)
+    if last_result and last_result.get("success"):
+        if "jogador_criado" in last_result:
+            acao = "criado" if last_result.get("jogador_criado") else "encontrado"
+            st.success(
+                f"Registro inserido. Jogador {acao}. "
+                f"ID jogador: {last_result.get('jogador_id')} | "
+                f"ID registro: {last_result.get('record_id')} | "
+                f"Status: {last_result.get('status')}"
+            )
+        else:
+            st.success(
+                f"Ação aplicada no registro {last_result.get('record_id')}. "
+                f"Status: {last_result.get('status', 'pendente')}"
+            )
+    elif last_result:
+        st.error("; ".join(last_result.get("errors", ["Erro ao salvar registro."])))
+
+    if not has_database_config():
+        st.warning("Admin indisponível: banco não configurado.")
+        return
+
+    if not st.session_state.get("admin_authenticated"):
+        with st.container(key="admin_login_shell"):
+            password = st.text_input("Senha admin", type="password", key="admin_password_input")
+            if st.button("Entrar", type="primary", key="admin_login_button"):
+                if hmac.compare_digest(password or "", ADMIN_PASSWORD):
+                    st.session_state.admin_authenticated = True
+                    st.rerun()
+                st.error("Senha inválida.")
+        return
+
+    with st.container(key="admin_session_bar"):
+        left, right = st.columns([0.78, 0.22], vertical_alignment="center")
+        with left:
+            st.caption("Sessão administrativa ativa.")
+        with right:
+            if st.button("Sair", key="admin_logout_button"):
+                st.session_state.admin_authenticated = False
+                st.rerun()
+
+    insert_tab, pending_tab = st.tabs(["Novo registro", "Pendentes"])
+
+    with insert_tab:
+        with st.container(key="admin_insert_shell"):
+            with st.form("admin_insert_record_form", clear_on_submit=True):
+                left, right = st.columns([0.58, 0.42], vertical_alignment="top")
+                with left:
+                    nickname = st.text_input("Nickname", max_chars=80)
+                    data_referencia = st.date_input("Data do registro", value=date.today(), max_value=date.today())
+                    catches = st.number_input(
+                        "Total de capturas",
+                        min_value=1,
+                        max_value=MAX_CATCHES_INPUT,
+                        step=1,
+                        format="%d",
                     )
-                else:
-                    st.success(
-                        f"Ação aplicada no registro {last_result.get('record_id')}. "
-                        f"Status: {last_result.get('status', 'pendente')}"
-                    )
-            else:
-                st.error("; ".join(last_result.get("errors", ["Erro ao salvar registro."])))
+                with right:
+                    state = st.selectbox("Estado (UF)", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"))
+                    periodo_tipo = st.selectbox("Tipo de período", ["mensal", "semanal"], index=0)
+                    status = st.selectbox("Status", ["validado", "pendente"], index=0)
+                    observacao = st.text_area("Observação opcional", max_chars=500, height=108)
+                submitted = st.form_submit_button("Salvar registro", type="primary")
 
-        if not has_database_config():
-            st.warning("Admin indisponível: banco não configurado.")
-            return
+            if submitted:
+                result = submit_player_record({
+                    "nickname": nickname,
+                    "state": state,
+                    "data_referencia": data_referencia,
+                    "catches": int(catches),
+                    "periodo_tipo": periodo_tipo,
+                    "status": status,
+                    "fonte": "admin",
+                    "observacao": observacao,
+                }, allow_validated=True)
+                if result.get("success"):
+                    clear_dashboard_caches()
+                st.session_state.admin_last_result = result
+                st.rerun()
 
-        password = st.text_input("Senha admin", type="password", key="admin_password_input")
-        if not password:
-            return
-        if not hmac.compare_digest(password, ADMIN_PASSWORD):
-            st.error("Senha inválida.")
-            return
-
-        st.markdown("##### Novo registro")
-        with st.form("admin_insert_record_form", clear_on_submit=True):
-            nickname = st.text_input("Nickname")
-            state = st.text_input("Estado")
-            data_referencia = st.date_input("Data do registro", value=date.today())
-            catches = st.number_input("Total de capturas", min_value=1, step=1)
-            periodo_tipo = st.selectbox("Tipo de período", ["mensal", "semanal"], index=0)
-            status = st.selectbox("Status", ["validado", "pendente"], index=0)
-            observacao = st.text_area("Observação opcional")
-            submitted = st.form_submit_button("Salvar registro")
-
-        if submitted:
-            result = submit_player_record({
-                "nickname": nickname,
-                "state": state,
-                "data_referencia": data_referencia,
-                "catches": int(catches),
-                "periodo_tipo": periodo_tipo,
-                "status": status,
-                "fonte": "admin",
-                "observacao": observacao,
-            }, allow_validated=True)
-            if result.get("success"):
-                clear_dashboard_caches()
-            st.session_state.admin_last_result = result
-            st.rerun()
-
-        st.divider()
-        st.markdown("##### Registros pendentes")
-
+    with pending_tab:
         try:
             pending_records = list_pending_records()
-        except Exception as exc:
-            st.error(f"Erro ao carregar pendentes: {exc}")
+        except Exception:
+            st.error("Não foi possível carregar os registros pendentes agora.")
             return
 
         if not pending_records:
-            st.caption("Nenhum registro pendente.")
+            st.info("Nenhum registro pendente.")
             return
 
         pending_table = pd.DataFrame(pending_records)
@@ -193,7 +256,12 @@ def render_admin_sidebar():
             "id", "nickname", "state", "data_referencia", "catches",
             "periodo_tipo", "contato_envio", "observacao", "created_at", "status",
         ]
-        st.dataframe(pending_table[preview_columns], hide_index=True, use_container_width=True)
+        st.dataframe(
+            pending_table[preview_columns],
+            hide_index=True,
+            use_container_width=True,
+            height=min(420, 82 + len(pending_table) * 36),
+        )
 
         labels = [
             f"#{row['id']} · {row['nickname']} · {row['data_referencia']} · {format_int(row['catches'])}"
@@ -203,68 +271,83 @@ def render_admin_sidebar():
         selected_index = labels.index(selected_label)
         record = pending_records[selected_index]
         record_id = int(record["id"])
+        state_value = str(record["state"] or "SP").upper()
+        state_index = BRAZILIAN_STATES.index(state_value) if state_value in BRAZILIAN_STATES else BRAZILIAN_STATES.index("SP")
 
-        with st.form("admin_review_record_form"):
-            edited_state = st.text_input("Estado", value=str(record["state"] or ""), key=f"state_{record_id}")
-            edited_date = st.date_input("Data", value=record["data_referencia"], key=f"date_{record_id}")
-            edited_catches = st.number_input(
-                "Total de capturas",
-                min_value=1,
-                value=int(record["catches"]),
-                step=1,
-                key=f"catches_{record_id}",
-            )
-            edited_period = st.selectbox(
-                "Tipo de período",
-                ["mensal", "semanal"],
-                index=["mensal", "semanal"].index(record["periodo_tipo"]),
-                key=f"period_{record_id}",
-            )
-            edited_note = st.text_area(
-                "Observação",
-                value=str(record.get("observacao") or ""),
-                key=f"note_{record_id}",
-            )
-            st.text_input(
-                "Contato informado",
-                value=str(record.get("contato_envio") or ""),
-                disabled=True,
-                key=f"contact_{record_id}",
-            )
-            admin_note = st.text_area("Nota do admin", key=f"admin_note_{record_id}")
-            action = st.radio(
-                "Ação",
-                ["Apenas salvar edição", "Aprovar", "Rejeitar", "Excluir logicamente"],
-                horizontal=False,
-                key=f"action_{record_id}",
-            )
-            review_submitted = st.form_submit_button("Aplicar")
+        with st.container(key="admin_review_shell"):
+            with st.form("admin_review_record_form"):
+                left, right = st.columns([0.52, 0.48], vertical_alignment="top")
+                with left:
+                    edited_state = st.selectbox("Estado (UF)", BRAZILIAN_STATES, index=state_index, key=f"state_{record_id}")
+                    edited_date = st.date_input(
+                        "Data",
+                        value=record["data_referencia"],
+                        max_value=date.today(),
+                        key=f"date_{record_id}",
+                    )
+                    edited_catches = st.number_input(
+                        "Total de capturas",
+                        min_value=1,
+                        max_value=MAX_CATCHES_INPUT,
+                        value=int(record["catches"]),
+                        step=1,
+                        format="%d",
+                        key=f"catches_{record_id}",
+                    )
+                    edited_period = st.selectbox(
+                        "Tipo de período",
+                        ["mensal", "semanal"],
+                        index=["mensal", "semanal"].index(record["periodo_tipo"]),
+                        key=f"period_{record_id}",
+                    )
+                with right:
+                    st.text_input(
+                        "Contato informado",
+                        value=str(record.get("contato_envio") or ""),
+                        disabled=True,
+                        key=f"contact_{record_id}",
+                    )
+                    edited_note = st.text_area(
+                        "Observação",
+                        value=str(record.get("observacao") or ""),
+                        max_chars=500,
+                        height=104,
+                        key=f"note_{record_id}",
+                    )
+                    admin_note = st.text_area("Nota do admin", max_chars=500, height=104, key=f"admin_note_{record_id}")
+                action = st.radio(
+                    "Ação",
+                    ["Apenas salvar edição", "Aprovar", "Rejeitar", "Excluir logicamente"],
+                    horizontal=True,
+                    key=f"action_{record_id}",
+                )
+                review_submitted = st.form_submit_button("Aplicar", type="primary")
 
-        if review_submitted:
-            update_result = update_pending_record(
-                record_id,
-                {
-                    "state": edited_state,
-                    "data_referencia": edited_date,
-                    "catches": int(edited_catches),
-                    "periodo_tipo": edited_period,
-                    "observacao": edited_note,
-                    "admin_note": admin_note,
-                },
-            )
-            result = update_result
-            if update_result.get("success") and action == "Aprovar":
-                result = approve_record(record_id, admin_note=admin_note)
-            elif update_result.get("success") and action in {"Rejeitar", "Excluir logicamente"}:
-                note = admin_note
-                if action == "Excluir logicamente":
-                    note = f"{admin_note}\nExclusão lógica solicitada pelo admin.".strip()
-                result = reject_record(record_id, admin_note=note)
+            if review_submitted:
+                update_result = update_pending_record(
+                    record_id,
+                    {
+                        "state": edited_state,
+                        "data_referencia": edited_date,
+                        "catches": int(edited_catches),
+                        "periodo_tipo": edited_period,
+                        "observacao": edited_note,
+                        "admin_note": admin_note,
+                    },
+                )
+                result = update_result
+                if update_result.get("success") and action == "Aprovar":
+                    result = approve_record(record_id, admin_note=admin_note)
+                elif update_result.get("success") and action in {"Rejeitar", "Excluir logicamente"}:
+                    note = admin_note
+                    if action == "Excluir logicamente":
+                        note = f"{admin_note}\nExclusão lógica solicitada pelo admin.".strip()
+                    result = reject_record(record_id, admin_note=note)
 
-            if result.get("success"):
-                clear_dashboard_caches()
-            st.session_state.admin_last_result = result
-            st.rerun()
+                if result.get("success"):
+                    clear_dashboard_caches()
+                st.session_state.admin_last_result = result
+                st.rerun()
 
 
 def trainer_avatar(name, place):
@@ -309,19 +392,19 @@ def trainer_avatar(name, place):
 
 def inject_css(dark_mode):
     palette = {
-        "bg": "#0f1008" if dark_mode else "#efe6cf",
-        "bg2": "#15170c" if dark_mode else "#f8f0dc",
-        "card": "rgba(36, 27, 19, 0.78)" if dark_mode else "rgba(255, 248, 228, 0.88)",
-        "card2": "rgba(45, 33, 24, 0.66)" if dark_mode else "rgba(245, 235, 210, 0.9)",
-        "card3": "rgba(18, 18, 12, 0.62)" if dark_mode else "rgba(255, 252, 242, 0.72)",
-        "border": "rgba(214, 174, 72, 0.25)" if dark_mode else "rgba(92, 67, 37, 0.22)",
-        "border2": "rgba(127, 163, 90, 0.26)" if dark_mode else "rgba(69, 107, 53, 0.22)",
-        "line": "rgba(240, 218, 159, 0.12)" if dark_mode else "rgba(82, 62, 40, 0.13)",
-        "text": "#f0efff" if dark_mode else "#28253b",
-        "muted": "#b9b6ff" if dark_mode else "#5e5b78",
+        "bg": "#0c1117" if dark_mode else "#f4f6f8",
+        "bg2": "#111a21" if dark_mode else "#eef3f1",
+        "card": "rgba(19, 27, 36, 0.86)" if dark_mode else "rgba(255, 255, 255, 0.92)",
+        "card2": "rgba(25, 38, 47, 0.72)" if dark_mode else "rgba(244, 248, 247, 0.92)",
+        "card3": "rgba(9, 14, 20, 0.66)" if dark_mode else "rgba(255, 255, 255, 0.78)",
+        "border": "rgba(125, 220, 205, 0.24)" if dark_mode else "rgba(27, 85, 82, 0.18)",
+        "border2": "rgba(226, 184, 79, 0.28)" if dark_mode else "rgba(178, 124, 38, 0.24)",
+        "line": "rgba(177, 207, 219, 0.12)" if dark_mode else "rgba(39, 64, 73, 0.12)",
+        "text": "#eef6f8" if dark_mode else "#17242b",
+        "muted": "#a9bdc7" if dark_mode else "#526870",
         "gold": "#e2b84f",
-        "green": "#7fa35a",
-        "terra": "#b06b4f",
+        "green": "#4cc9b0",
+        "terra": "#d47b63",
         "blue": "#8fa7ff",
     }
 
@@ -342,8 +425,8 @@ def inject_css(dark_mode):
         --rb-green: {palette["green"]};
         --rb-terra: {palette["terra"]};
         --rb-blue: {palette["blue"]};
-        --rb-radius-lg: 26px;
-        --rb-radius-md: 18px;
+        --rb-radius-lg: 12px;
+        --rb-radius-md: 8px;
         --rb-shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
     }}
 
@@ -356,16 +439,12 @@ def inject_css(dark_mode):
         overflow-x: hidden;
         color: var(--rb-text);
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background:
-            radial-gradient(circle at 12% 0%, rgba(226, 184, 79, 0.13), transparent 28rem),
-            radial-gradient(circle at 88% 9%, rgba(127, 163, 90, 0.16), transparent 24rem),
-            radial-gradient(circle at 82% 35%, rgba(176, 107, 79, 0.10), transparent 22rem),
-            linear-gradient(140deg, var(--rb-bg), var(--rb-bg-2) 52%, #0b0c07);
+        background: linear-gradient(140deg, var(--rb-bg), var(--rb-bg-2) 54%, #071016);
     }}
 
     .block-container {{
         max-width: 1480px;
-        padding: 4rem 1.55rem 4rem !important;
+        padding: 2rem 1.55rem 4rem !important;
     }}
 
     section.main > div {{
@@ -378,14 +457,13 @@ def inject_css(dark_mode):
 
     .st-key-navbar {{
         position: sticky;
-        top: 0;
+        top: 0.35rem;
         z-index: 80;
         margin: 0 0 0.75rem;
         padding: 0.72rem 1rem;
         border: 1px solid var(--rb-border);
-        border-top: 0;
-        border-radius: 0 0 22px 22px;
-        background: rgba(24, 21, 14, 0.78);
+        border-radius: var(--rb-radius-md);
+        background: rgba(13, 20, 27, 0.86);
         backdrop-filter: blur(22px);
         box-shadow: 0 16px 42px rgba(0, 0, 0, 0.24);
     }}
@@ -407,7 +485,7 @@ def inject_css(dark_mode):
     .brand-orb {{
         width: 40px;
         height: 40px;
-        border-radius: 50%;
+        border-radius: var(--rb-radius-md);
         display: grid;
         place-items: center;
         flex: 0 0 auto;
@@ -471,11 +549,10 @@ def inject_css(dark_mode):
         overflow: hidden;
         min-height: 350px;
         border: 1px solid var(--rb-border);
-        border-radius: 30px;
+        border-radius: var(--rb-radius-lg);
         padding: clamp(1.3rem, 3vw, 2.6rem);
         background:
-            linear-gradient(140deg, rgba(226,184,79,0.12), transparent 38%),
-            radial-gradient(circle at 95% 5%, rgba(127,163,90,0.18), transparent 18rem),
+            linear-gradient(140deg, rgba(76,201,176,0.12), transparent 42%),
             linear-gradient(160deg, var(--rb-card), var(--rb-card-3));
         box-shadow: var(--rb-shadow), inset 0 1px 0 rgba(255,255,255,0.05);
     }}
@@ -487,10 +564,8 @@ def inject_css(dark_mode):
         bottom: -7rem;
         width: 420px;
         height: 260px;
-        opacity: 0.2;
-        background:
-            radial-gradient(ellipse at 20% 50%, rgba(127,163,90,0.75), transparent 45%),
-            radial-gradient(ellipse at 62% 40%, rgba(127,163,90,0.42), transparent 45%);
+        opacity: 0.12;
+        background: linear-gradient(135deg, rgba(76,201,176,0.72), rgba(226,184,79,0.34));
         transform: rotate(-18deg);
         pointer-events: none;
     }}
@@ -1421,6 +1496,81 @@ def inject_css(dark_mode):
         box-shadow: 0 0 18px rgba(226,184,79,0.18);
     }}
 
+    .page-hero {{
+        margin-bottom: 1rem;
+        padding: clamp(1rem, 2.6vw, 1.55rem);
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-lg);
+        background: linear-gradient(150deg, var(--rb-card), var(--rb-card-3));
+        box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+    }}
+
+    .page-title {{
+        margin: 0.85rem 0 0.45rem;
+        color: var(--rb-text);
+        font-size: clamp(2rem, 4.3vw, 3.5rem);
+        line-height: 1;
+        font-weight: 950;
+        letter-spacing: 0;
+    }}
+
+    .page-copy {{
+        max-width: 760px;
+        margin: 0;
+        color: var(--rb-muted);
+        line-height: 1.62;
+    }}
+
+    .st-key-public_submission_shell,
+    .st-key-admin_login_shell,
+    .st-key-admin_session_bar,
+    .st-key-admin_insert_shell,
+    .st-key-admin_review_shell {{
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-md);
+        padding: clamp(0.9rem, 2vw, 1.15rem);
+        background: linear-gradient(150deg, rgba(19,27,36,0.74), rgba(9,14,20,0.48));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }}
+
+    .st-key-admin_session_bar {{
+        margin-bottom: 1rem;
+    }}
+
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 0.45rem;
+        border-bottom: 1px solid var(--rb-line);
+    }}
+
+    .stTabs [data-baseweb="tab"] {{
+        border-radius: var(--rb-radius-md) var(--rb-radius-md) 0 0;
+        color: var(--rb-muted);
+        font-weight: 820;
+    }}
+
+    .stTabs [aria-selected="true"] {{
+        color: var(--rb-text) !important;
+        background: rgba(76,201,176,0.10);
+    }}
+
+    .stAlert {{
+        border-radius: var(--rb-radius-md);
+    }}
+
+    .stat-card,
+    .podium-card,
+    .state-card,
+    .range-card,
+    .st-key-chart_panel,
+    .st-key-filters_panel,
+    .st-key-ranking_general_panel,
+    .st-key-ranking_average_panel,
+    .st-key-distribution_panel,
+    .rb-table-wrap,
+    .empty-state {{
+        border-radius: var(--rb-radius-md) !important;
+    }}
+
     label, .stMarkdown, .stTextInput label, .stMultiSelect label {{
         color: var(--rb-text) !important;
     }}
@@ -1428,7 +1578,13 @@ def inject_css(dark_mode):
     div[data-baseweb="input"], div[data-baseweb="select"] > div {{
         border-color: var(--rb-border) !important;
         background-color: rgba(255,255,255,0.045) !important;
-        border-radius: 16px !important;
+        border-radius: var(--rb-radius-md) !important;
+    }}
+
+    textarea {{
+        border-radius: var(--rb-radius-md) !important;
+        border-color: var(--rb-border) !important;
+        background-color: rgba(255,255,255,0.045) !important;
     }}
 
     div[data-baseweb="tag"] {{
@@ -1451,10 +1607,11 @@ def inject_css(dark_mode):
         color: #161106 !important;
     }}
 
-    .stButton > button {{
+    .stButton > button,
+    .stFormSubmitButton > button {{
         min-height: 34px;
         width: 100%;
-        border-radius: 999px;
+        border-radius: var(--rb-radius-md);
         border: 1px solid var(--rb-border);
         background: rgba(255,255,255,0.035);
         color: var(--rb-text);
@@ -1463,14 +1620,16 @@ def inject_css(dark_mode):
         transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
     }}
 
-    .stButton > button:hover {{
+    .stButton > button:hover,
+    .stFormSubmitButton > button:hover {{
         transform: translateY(-1px);
         border-color: rgba(226,184,79,0.55);
         background: rgba(226,184,79,0.11);
         color: var(--rb-text);
     }}
 
-    .stButton > button:disabled {{
+    .stButton > button:disabled,
+    .stFormSubmitButton > button:disabled {{
         opacity: 0.38;
     }}
 
@@ -2090,19 +2249,34 @@ if "dark_theme" not in st.session_state:
 
 inject_css(st.session_state.dark_theme)
 page_param = str(st.query_params.get("page", "")).strip().lower()
-default_page = "Enviar dados" if page_param in {"enviar", "enviar-dados", "submit"} else "Dashboard"
+page_options = ["Dashboard", "Enviar dados"]
+if ENABLE_ADMIN and ADMIN_PASSWORD:
+    page_options.append("Admin")
+
+if page_param in {"enviar", "enviar-dados", "submit"}:
+    default_page = "Enviar dados"
+elif page_param == "admin" and "Admin" in page_options:
+    default_page = "Admin"
+else:
+    default_page = "Dashboard"
+
 current_page = st.sidebar.radio(
-    "Pagina",
-    ["Dashboard", "Enviar dados"],
-    index=["Dashboard", "Enviar dados"].index(default_page),
+    "Página",
+    page_options,
+    index=page_options.index(default_page),
 )
+
+render_navbar()
 
 if current_page == "Enviar dados":
     render_public_submission_page()
+    render_footer()
     st.stop()
 
-render_navbar()
-render_admin_sidebar()
+if current_page == "Admin":
+    render_admin_page()
+    render_footer()
+    st.stop()
 
 with st.spinner("Carregando ranking..."):
     df = get_data(get_data_source_fingerprint())

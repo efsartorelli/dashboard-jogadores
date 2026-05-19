@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterator
 
 from src.config import get_setting
+from src.security import sanitize_error_message
 
 try:
     from dotenv import load_dotenv
@@ -59,11 +60,12 @@ def get_connection(database_url: str | None = None) -> Iterator:
 
 
 def check_database(database_url: str | None = None) -> tuple[bool, str | None]:
+    url = database_url or get_database_url()
     try:
-        with get_connection(database_url) as conn:
+        with get_connection(url) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 cur.fetchone()
         return True, None
     except Exception as exc:
-        return False, str(exc)
+        return False, sanitize_error_message(exc, [url])

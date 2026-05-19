@@ -5,6 +5,11 @@ import re
 
 _HTML_TAG_RE = re.compile(r"<[^>]*>")
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+BRAZILIAN_STATES = (
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+    "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+    "SP", "SE", "TO",
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +23,10 @@ class Submission:
 
 def normalize_nickname(value: str) -> str:
     return sanitize_text(value, max_length=80)
+
+
+def normalize_state(value: object) -> str:
+    return sanitize_text(value, max_length=2).upper()
 
 
 def sanitize_text(value: object, max_length: int) -> str:
@@ -44,10 +53,14 @@ def validate_submission(submission: Submission, previous_catches: int | None = N
         errors.append("Nickname deve ter no máximo 80 caracteres.")
     if not submission.state or not str(submission.state).strip():
         errors.append("Estado é obrigatório.")
+    elif normalize_state(submission.state) not in BRAZILIAN_STATES:
+        errors.append("Estado deve ser uma UF brasileira válida.")
     if submission.periodo_tipo not in {"mensal", "semanal"}:
         errors.append("Tipo de período deve ser mensal ou semanal.")
     if submission.catches <= 0:
         errors.append("Capturas totais devem ser maiores que zero.")
+    if submission.catches > 9_999_999_999:
+        errors.append("Capturas totais excedem o limite permitido.")
     if previous_catches is not None and submission.catches < previous_catches:
         errors.append("Capturas totais não podem ser menores que o registro anterior sem revisão manual.")
     if submission.data_referencia > date.today():

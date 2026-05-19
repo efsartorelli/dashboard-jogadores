@@ -61,7 +61,8 @@ class SubmissionValidationTest(unittest.TestCase):
             patch("src.services.submissions.inserir_novo_jogador", return_value=999), \
             patch("src.services.submissions.inserir_nickname_jogador"), \
             patch("src.services.submissions.verificar_duplicidade_registro", return_value=False), \
-            patch("src.services.submissions.inserir_registro_periodico", return_value=123) as insert_record:
+            patch("src.services.submissions.inserir_registro_periodico", return_value=123) as insert_record, \
+            patch("src.services.submissions.registrar_auditoria") as audit:
             result = submit_player_record(payload, conn=conn)
 
         self.assertTrue(result["success"])
@@ -71,6 +72,7 @@ class SubmissionValidationTest(unittest.TestCase):
         self.assertEqual(insert_record.call_args.kwargs["status"], "pendente")
         self.assertEqual(insert_record.call_args.kwargs["periodo_tipo"], "mensal")
         self.assertEqual(insert_record.call_args.kwargs["contato_envio"], "")
+        self.assertEqual(audit.call_args.args[2], "criado")
 
     def test_public_payload_cannot_force_validated_without_explicit_period_or_contact(self):
         conn = FakeConn()
@@ -88,7 +90,8 @@ class SubmissionValidationTest(unittest.TestCase):
             patch("src.services.submissions.inserir_novo_jogador", return_value=999), \
             patch("src.services.submissions.inserir_nickname_jogador"), \
             patch("src.services.submissions.verificar_duplicidade_registro", return_value=False), \
-            patch("src.services.submissions.inserir_registro_periodico", return_value=123) as insert_record:
+            patch("src.services.submissions.inserir_registro_periodico", return_value=123) as insert_record, \
+            patch("src.services.submissions.registrar_auditoria"):
             result = submit_player_record(payload, conn=conn)
 
         self.assertTrue(result["success"])
@@ -113,7 +116,8 @@ class SubmissionValidationTest(unittest.TestCase):
         with patch("src.services.submissions.buscar_jogador_por_nickname", return_value={"id": 2}), \
             patch("src.services.submissions.buscar_ultimo_catches", return_value=3_063_000), \
             patch("src.services.submissions.verificar_duplicidade_registro", return_value=False), \
-            patch("src.services.submissions.inserir_registro_periodico", return_value=124) as insert_record:
+            patch("src.services.submissions.inserir_registro_periodico", return_value=124) as insert_record, \
+            patch("src.services.submissions.registrar_auditoria"):
             result = submit_player_record(payload, conn=conn, allow_validated=True)
 
         self.assertTrue(result["success"])
@@ -140,6 +144,24 @@ class SubmissionValidationTest(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertTrue(any("existe registro" in error for error in result["errors"]))
         self.assertEqual(duplicate_check.call_args.kwargs["statuses"], ("pendente", "validado"))
+        self.assertEqual(conn.commits, 0)
+
+    def test_invalid_status_is_rejected_before_writes(self):
+        conn = FakeConn()
+        payload = {
+            "nickname": "NovoJogador",
+            "state": "SP",
+            "data_referencia": "2026-04-30",
+            "catches": 1000,
+            "status": "rejeitado",
+        }
+
+        with patch("src.services.submissions.inserir_novo_jogador") as insert_player:
+            result = submit_player_record(payload, conn=conn, allow_validated=True)
+
+        self.assertFalse(result["success"])
+        self.assertTrue(any("Status" in error for error in result["errors"]))
+        insert_player.assert_not_called()
         self.assertEqual(conn.commits, 0)
 
     def test_submit_invalid_payload_returns_validation_errors(self):

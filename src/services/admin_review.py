@@ -12,6 +12,7 @@ from src.database.repositories import (
     registrar_auditoria,
     verificar_duplicidade_registro,
 )
+from src.validation.submissions import BRAZILIAN_STATES, normalize_state, sanitize_text
 
 
 def _parse_date(value) -> date:
@@ -59,6 +60,8 @@ def approve_record(record_id: int, admin_note: str | None = None, conn=None) -> 
             return {"success": False, "errors": ["Jogador não está ativo."]}
         if int(record["catches"]) <= 0:
             return {"success": False, "errors": ["Capturas devem ser maiores que zero."]}
+        if record["data_referencia"] > date.today():
+            return {"success": False, "errors": ["Data de referência não pode ser futura."]}
 
         duplicated = verificar_duplicidade_registro(
             conn,
@@ -77,9 +80,9 @@ def approve_record(record_id: int, admin_note: str | None = None, conn=None) -> 
         registrar_auditoria(conn, record_id, "aprovado", before, after)
         conn.commit()
         return {"success": True, "errors": [], "record_id": record_id, "status": "validado"}
-    except Exception as exc:
+    except Exception:
         conn.rollback()
-        return {"success": False, "errors": [str(exc)]}
+        return {"success": False, "errors": ["Não foi possível aprovar o registro agora."]}
     finally:
         if owns_connection and context is not None:
             context.__exit__(None, None, None)
@@ -94,6 +97,8 @@ def reject_record(record_id: int, admin_note: str | None = None, conn=None) -> d
         record = buscar_registro_por_id(conn, record_id)
         if not record:
             return {"success": False, "errors": ["Registro não encontrado."]}
+        if record["status"] != "pendente":
+            return {"success": False, "errors": ["Apenas registros pendentes podem ser rejeitados."]}
         before = _audit_payload(record, admin_note)
         alterar_status_registro(conn, record_id, "rejeitado")
         after = dict(before)
@@ -101,9 +106,9 @@ def reject_record(record_id: int, admin_note: str | None = None, conn=None) -> d
         registrar_auditoria(conn, record_id, "rejeitado", before, after)
         conn.commit()
         return {"success": True, "errors": [], "record_id": record_id, "status": "rejeitado"}
-    except Exception as exc:
+    except Exception:
         conn.rollback()
-        return {"success": False, "errors": [str(exc)]}
+        return {"success": False, "errors": ["Não foi possível rejeitar o registro agora."]}
     finally:
         if owns_connection and context is not None:
             context.__exit__(None, None, None)
@@ -124,16 +129,23 @@ def update_pending_record(record_id: int, payload: dict[str, Any], conn=None) ->
         data_referencia = _parse_date(payload.get("data_referencia", record["data_referencia"]))
         catches = int(payload.get("catches", record["catches"]))
         periodo_tipo = str(payload.get("periodo_tipo", record["periodo_tipo"])).strip().lower()
-        state = str(payload.get("state", record["state"])).strip()
-        observacao = payload.get("observacao", record.get("observacao"))
+        state = normalize_state(payload.get("state", record["state"]))
+        observacao = sanitize_text(payload.get("observacao", record.get("observacao")), max_length=500)
+        admin_note = sanitize_text(payload.get("admin_note"), max_length=500)
 
         errors = []
         if catches <= 0:
             errors.append("Capturas devem ser maiores que zero.")
+        if catches > 9_999_999_999:
+            errors.append("Capturas excedem o limite permitido.")
         if periodo_tipo not in {"mensal", "semanal"}:
             errors.append("Tipo de período deve ser mensal ou semanal.")
         if not state:
             errors.append("Estado é obrigatório.")
+        elif state not in BRAZILIAN_STATES:
+            errors.append("Estado deve ser uma UF brasileira válida.")
+        if data_referencia > date.today():
+            errors.append("Data de referência não pode ser futura.")
         if errors:
             return {"success": False, "errors": errors}
 
@@ -147,15 +159,15 @@ def update_pending_record(record_id: int, payload: dict[str, Any], conn=None) ->
         if duplicated:
             return {"success": False, "errors": ["Já existe registro validado para este jogador, data e período."]}
 
-        before = _audit_payload(record, payload.get("admin_note"))
+        before = _audit_payload(record, admin_note)
         atualizar_registro(conn, record_id, data_referencia, catches, periodo_tipo, state, observacao)
         updated = buscar_registro_por_id(conn, record_id)
-        registrar_auditoria(conn, record_id, "alterado", before, _audit_payload(updated, payload.get("admin_note")))
+        registrar_auditoria(conn, record_id, "alterado", before, _audit_payload(updated, admin_note))
         conn.commit()
         return {"success": True, "errors": [], "record_id": record_id}
-    except Exception as exc:
+    except Exception:
         conn.rollback()
-        return {"success": False, "errors": [str(exc)]}
+        return {"success": False, "errors": ["Não foi possível editar o registro agora."]}
     finally:
         if owns_connection and context is not None:
             context.__exit__(None, None, None)

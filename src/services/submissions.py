@@ -10,9 +10,16 @@ from src.database.repositories import (
     inserir_nickname_jogador,
     inserir_novo_jogador,
     inserir_registro_periodico,
+    registrar_auditoria,
     verificar_duplicidade_registro,
 )
-from src.validation.submissions import Submission, normalize_nickname, sanitize_text, validate_submission
+from src.validation.submissions import (
+    Submission,
+    normalize_nickname,
+    normalize_state,
+    sanitize_text,
+    validate_submission,
+)
 
 
 def _parse_date(value) -> date:
@@ -27,8 +34,37 @@ def parse_submission_payload(payload: dict[str, Any]) -> Submission:
         data_referencia=_parse_date(payload.get("data_referencia")),
         catches=int(payload.get("catches")),
         periodo_tipo=str(payload.get("periodo_tipo", "mensal")).strip().lower(),
-        state=sanitize_text(payload.get("state"), max_length=30),
+        state=normalize_state(payload.get("state")),
     )
+
+
+def _requested_status(payload: dict[str, Any], allow_validated: bool) -> str | None:
+    status = str(payload.get("status", "pendente")).strip().lower()
+    if not allow_validated and status == "validado":
+        return "pendente"
+    if status not in {"pendente", "validado"}:
+        return None
+    return status
+
+
+def _audit_after_payload(
+    jogador_id: int,
+    record_id: int,
+    submission: Submission,
+    status: str,
+    fonte: str,
+) -> dict[str, Any]:
+    return {
+        "record_id": record_id,
+        "jogador_id": jogador_id,
+        "nickname": submission.nickname,
+        "state": submission.state,
+        "periodo_tipo": submission.periodo_tipo,
+        "data_referencia": submission.data_referencia.isoformat(),
+        "catches": submission.catches,
+        "status": status,
+        "fonte": fonte,
+    }
 
 
 def submit_player_record(
@@ -38,8 +74,20 @@ def submit_player_record(
 ) -> dict[str, Any]:
     try:
         submission = parse_submission_payload(payload)
-    except Exception as exc:
-        return {"success": False, "errors": [f"Dados invalidos: {exc}"], "record_id": None}
+    except Exception:
+        return {"success": False, "errors": ["Dados inválidos. Revise data e capturas."], "record_id": None}
+
+    status = _requested_status(payload, allow_validated)
+    if status is None:
+        return {
+            "success": False,
+            "errors": ["Status deve ser pendente ou validado."],
+            "record_id": None,
+        }
+
+    fonte = sanitize_text(payload.get("fonte", "site"), max_length=40).lower() or "site"
+    observacao = sanitize_text(payload.get("observacao"), max_length=500)
+    contato_envio = sanitize_text(payload.get("contato_envio"), max_length=120)
 
     owns_connection = conn is None
     context = get_connection() if owns_connection else None
@@ -56,6 +104,23 @@ def submit_player_record(
         jogador_criado = False
         if player:
             jogador_id = int(player["id"])
+            if verificar_duplicidade_registro(
+                conn,
+                jogador_id,
+                submission.periodo_tipo,
+                submission.data_referencia,
+                statuses=("pendente", "validado"),
+            ):
+                return {
+                    "success": False,
+                    "errors": ["Ja existe registro pendente ou validado para este jogador neste periodo."],
+                    "record_id": None,
+                }
+
+            previous_catches = buscar_ultimo_catches(conn, jogador_id, submission.periodo_tipo)
+            consistency_errors = validate_submission(submission, previous_catches=previous_catches)
+            if consistency_errors:
+                return {"success": False, "errors": consistency_errors, "record_id": None}
         else:
             jogador_id = inserir_novo_jogador(
                 conn,
@@ -67,36 +132,6 @@ def submit_player_record(
             inserir_nickname_jogador(conn, jogador_id, submission.nickname)
             jogador_criado = True
 
-        if verificar_duplicidade_registro(
-            conn,
-            jogador_id,
-            submission.periodo_tipo,
-            submission.data_referencia,
-            statuses=("pendente", "validado"),
-        ):
-            return {
-                "success": False,
-                "errors": ["Ja existe registro pendente ou validado para este jogador neste periodo."],
-                "record_id": None,
-            }
-
-        previous_catches = buscar_ultimo_catches(conn, jogador_id, submission.periodo_tipo)
-        consistency_errors = validate_submission(submission, previous_catches=previous_catches)
-        if consistency_errors:
-            return {"success": False, "errors": consistency_errors, "record_id": None}
-
-        status = str(payload.get("status", "pendente")).strip().lower()
-        if not allow_validated and status == "validado":
-            status = "pendente"
-        if status not in {"pendente", "validado"}:
-            return {
-                "success": False,
-                "errors": ["Status deve ser pendente ou validado."],
-                "record_id": None,
-            }
-
-        fonte = str(payload.get("fonte", "site")).strip().lower() or "site"
-
         record_id = inserir_registro_periodico(
             conn,
             jogador_id=jogador_id,
@@ -106,8 +141,8 @@ def submit_player_record(
             fonte=fonte,
             status=status,
             created_by=payload.get("created_by"),
-            observacao=sanitize_text(payload.get("observacao"), max_length=500),
-            contato_envio=sanitize_text(payload.get("contato_envio"), max_length=120),
+            observacao=observacao,
+            contato_envio=contato_envio,
         )
         if record_id is None:
             conn.rollback()
@@ -117,6 +152,14 @@ def submit_player_record(
                 "record_id": None,
             }
 
+        registrar_auditoria(
+            conn,
+            record_id,
+            "criado",
+            antes=None,
+            depois=_audit_after_payload(jogador_id, record_id, submission, status, fonte),
+            usuario_id=payload.get("created_by"),
+        )
         conn.commit()
         return {
             "success": True,

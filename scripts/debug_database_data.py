@@ -8,8 +8,9 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from src.database.connection import get_connection
+from src.database.connection import get_connection, get_database_url
 from src.database.repositories import carregar_dados_dashboard
+from src.security import sanitize_error_message
 
 
 MAIN_TABLES = [
@@ -138,7 +139,7 @@ def main() -> int:
         return 0
     except Exception as exc:
         print("ERRO DEBUG BANCO: falha ao consultar dados.")
-        print(f"Detalhe: {exc}")
+        print(f"Detalhe: {sanitize_error_message(exc, [get_database_url()])}")
         return 1
 
 

@@ -52,13 +52,23 @@ CREATE TABLE IF NOT EXISTS registros_periodicos (
     status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'validado', 'rejeitado')),
     created_by UUID REFERENCES usuarios(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (jogador_id, periodo_tipo, data_referencia)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE registros_periodicos
+    DROP CONSTRAINT IF EXISTS registros_periodicos_jogador_id_periodo_tipo_data_referencia_key;
 
 CREATE INDEX IF NOT EXISTS idx_registros_jogador_data ON registros_periodicos (jogador_id, data_referencia);
 CREATE INDEX IF NOT EXISTS idx_registros_periodo_data ON registros_periodicos (periodo_tipo, data_referencia);
 CREATE INDEX IF NOT EXISTS idx_registros_status ON registros_periodicos (status);
+CREATE INDEX IF NOT EXISTS idx_jogadores_nickname_lower ON jogadores (lower(nickname_atual));
+CREATE INDEX IF NOT EXISTS idx_jogador_nicknames_nickname_lower ON jogador_nicknames (lower(nickname));
+CREATE INDEX IF NOT EXISTS idx_registros_dashboard_validado
+    ON registros_periodicos (periodo_tipo, status, data_referencia, jogador_id)
+    WHERE status = 'validado';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_registros_ativos_jogador_periodo_data
+    ON registros_periodicos (jogador_id, periodo_tipo, data_referencia)
+    WHERE status IN ('pendente', 'validado');
 
 CREATE TABLE IF NOT EXISTS rankings_snapshot (
     id BIGSERIAL PRIMARY KEY,

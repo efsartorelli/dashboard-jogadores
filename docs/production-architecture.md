@@ -32,6 +32,8 @@ API, jobs assíncronos e cache sem redesenhar a interface.
 
 - `registros_periodicos (jogador_id, data_referencia)`
 - `registros_periodicos (periodo_tipo, data_referencia)`
+- `registros_periodicos (jogador_id, periodo_tipo, data_referencia)` unico parcial
+  para `status IN ('pendente', 'validado')`
 - `ranking_itens (snapshot_id, posicao)`
 - `jogadores (mostrar, ativo)`
 - `jogadores (state)`

@@ -182,7 +182,7 @@ def inserir_registro_periodico(
                 created_by, observacao, contato_envio
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (jogador_id, periodo_tipo, data_referencia) DO NOTHING
+            ON CONFLICT DO NOTHING
             RETURNING id
             """,
             (

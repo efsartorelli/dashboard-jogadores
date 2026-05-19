@@ -140,6 +140,30 @@ def main() -> int:
                     )
                     validated = int(cur.fetchone()["count"])
 
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) AS count
+                        FROM (
+                            SELECT jogador_id, periodo_tipo, data_referencia
+                            FROM registros_periodicos
+                            WHERE status IN ('pendente', 'validado')
+                            GROUP BY jogador_id, periodo_tipo, data_referencia
+                            HAVING COUNT(*) > 1
+                        ) duplicated
+                        """
+                    )
+                    active_duplicates = int(cur.fetchone()["count"])
+
+                    cur.execute(
+                        """
+                        SELECT 1
+                        FROM pg_indexes
+                        WHERE schemaname = 'public'
+                          AND indexname = 'uq_registros_ativos_jogador_periodo_data'
+                        """
+                    )
+                    has_partial_unique_index = cur.fetchone() is not None
+
             missing_tables = sorted(set(MAIN_TABLES) - set(found_tables))
             if missing_tables:
                 fail("Tabelas ausentes: " + ", ".join(missing_tables), failures)
@@ -160,6 +184,16 @@ def main() -> int:
                 ok(f"Registros validados: {validated}")
             else:
                 fail("Nao existe registro validado para alimentar o dashboard.", failures)
+
+            if active_duplicates == 0:
+                ok("Sem duplicidade ativa por jogador/data/tipo")
+            else:
+                fail("Ha duplicidade ativa em registros pendentes/validados.", failures)
+
+            if has_partial_unique_index:
+                ok("Indice unico parcial de registros ativos encontrado")
+            else:
+                warn("Migration database/migrations/001_production_hardening.sql ainda nao aplicada.")
         except Exception:
             fail("Falha ao conectar ou consultar o banco. Verifique DATABASE_URL e schema.", failures)
 

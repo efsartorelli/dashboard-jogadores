@@ -106,7 +106,7 @@ def import_excel_to_db(
                     jogador_id, periodo_tipo, data_referencia, catches, fonte, status
                 )
                 VALUES (%s, %s, %s, %s, 'importacao_excel', 'validado')
-                ON CONFLICT (jogador_id, periodo_tipo, data_referencia) DO NOTHING
+                ON CONFLICT DO NOTHING
                 """,
                 [
                     (

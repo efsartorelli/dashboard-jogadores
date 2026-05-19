@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+from src.security import sanitize_error_message
 
 try:
     from dotenv import load_dotenv
@@ -39,31 +40,6 @@ MAIN_TABLES = [
     "historico_processamentos",
     "auditoria_registros",
 ]
-
-
-def mask_database_url(url: str) -> str:
-    try:
-        parts = urlsplit(url)
-        host = parts.hostname or "host"
-        port = f":{parts.port}" if parts.port else ""
-        netloc = f"***:***@{host}{port}" if parts.username else f"{host}{port}"
-        return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
-    except Exception:
-        return "<DATABASE_URL mascarada>"
-
-
-def sanitize_error(error: Exception, database_url: str) -> str:
-    message = str(error)
-    if database_url:
-        message = message.replace(database_url, "<DATABASE_URL>")
-        message = message.replace(mask_database_url(database_url), "<DATABASE_URL>")
-        if "@" in database_url:
-            userinfo = database_url.split("//", 1)[-1].split("@", 1)[0]
-            message = message.replace(userinfo, "***:***")
-            if ":" in userinfo:
-                password = userinfo.split(":", 1)[1]
-                message = message.replace(password, "<PASSWORD>")
-    return message
 
 
 def main() -> int:
@@ -110,7 +86,7 @@ def main() -> int:
         return 0
     except Exception as exc:
         print("ERRO: nao foi possivel conectar ao PostgreSQL/Supabase.")
-        print(f"Detalhe: {sanitize_error(exc, database_url)}")
+        print(f"Detalhe: {sanitize_error_message(exc, [database_url])}")
         return 1
 
 
