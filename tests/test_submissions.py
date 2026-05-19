@@ -54,7 +54,6 @@ class SubmissionValidationTest(unittest.TestCase):
             "state": "SP",
             "data_referencia": "2026-04-30",
             "catches": 1000,
-            "periodo_tipo": "mensal",
         }
 
         with patch("src.services.submissions.buscar_jogador_por_nickname", return_value=None), \
@@ -70,18 +69,17 @@ class SubmissionValidationTest(unittest.TestCase):
         self.assertTrue(result["jogador_criado"])
         self.assertEqual(conn.commits, 1)
         self.assertEqual(insert_record.call_args.kwargs["status"], "pendente")
+        self.assertEqual(insert_record.call_args.kwargs["periodo_tipo"], "mensal")
         self.assertEqual(insert_record.call_args.kwargs["contato_envio"], "")
 
-    def test_public_payload_cannot_force_validated_and_saves_contact(self):
+    def test_public_payload_cannot_force_validated_without_explicit_period_or_contact(self):
         conn = FakeConn()
         payload = {
             "nickname": "NovoJogador",
             "state": "SP",
             "data_referencia": "2026-04-30",
             "catches": 1000,
-            "periodo_tipo": "mensal",
             "status": "validado",
-            "contato_envio": "<script>@discord</script>",
             "observacao": "<b>print</b>",
         }
 
@@ -96,7 +94,8 @@ class SubmissionValidationTest(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["status"], "pendente")
         self.assertEqual(insert_record.call_args.kwargs["status"], "pendente")
-        self.assertEqual(insert_record.call_args.kwargs["contato_envio"], "@discord")
+        self.assertEqual(insert_record.call_args.kwargs["periodo_tipo"], "mensal")
+        self.assertEqual(insert_record.call_args.kwargs["contato_envio"], "")
         self.assertEqual(insert_record.call_args.kwargs["observacao"], "print")
 
     def test_submit_admin_payload_can_be_validated(self):

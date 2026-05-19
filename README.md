@@ -146,12 +146,11 @@ Campos do envio publico:
 - estado
 - data do registro
 - total de capturas
-- tipo de periodo: `mensal` ou `semanal`
-- contato opcional
 - observacao opcional
 
 Todo envio publico entra obrigatoriamente como `pendente`. O jogador nao escolhe
-status e nao consegue aprovar o proprio registro. O servico bloqueia duplicidade
+status, nao escolhe tipo de periodo e nao consegue aprovar o proprio registro.
+O tipo de periodo publico e sempre `mensal`. O servico bloqueia duplicidade
 pendente ou validada para o mesmo jogador, data e tipo de periodo.
 
 Fluxo completo:

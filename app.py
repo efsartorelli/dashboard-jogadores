@@ -95,8 +95,6 @@ def render_public_submission_page():
         state = st.text_input("Estado")
         data_referencia = st.date_input("Data do registro", value=date.today())
         catches = st.number_input("Total de capturas", min_value=1, step=1)
-        periodo_tipo = st.selectbox("Tipo de periodo", ["mensal", "semanal"], index=0)
-        contato = st.text_input("Contato opcional")
         observacao = st.text_area("Observacao opcional", max_chars=500)
         submitted = st.form_submit_button("Enviar para revisao")
 
@@ -106,10 +104,9 @@ def render_public_submission_page():
             "state": state,
             "data_referencia": data_referencia,
             "catches": int(catches),
-            "periodo_tipo": periodo_tipo,
+            "periodo_tipo": "mensal",
             "status": "pendente",
             "fonte": "site",
-            "contato_envio": contato,
             "observacao": observacao,
         })
         st.session_state.public_submission_result = result
@@ -355,6 +352,7 @@ def inject_css(dark_mode):
     }}
 
     .stApp {{
+        padding-top: 0 !important;
         overflow-x: hidden;
         color: var(--rb-text);
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -367,7 +365,11 @@ def inject_css(dark_mode):
 
     .block-container {{
         max-width: 1480px;
-        padding: 0.7rem 1.55rem 4rem;
+        padding: 4rem 1.55rem 4rem !important;
+    }}
+
+    section.main > div {{
+        padding-top: 4rem !important;
     }}
 
     .section-anchor {{
@@ -378,7 +380,7 @@ def inject_css(dark_mode):
         position: sticky;
         top: 0;
         z-index: 80;
-        margin: -0.7rem 0 0.75rem;
+        margin: 0 0 0.75rem;
         padding: 0.72rem 1rem;
         border: 1px solid var(--rb-border);
         border-top: 0;
