@@ -1,11 +1,23 @@
 from html import escape
+from datetime import date
+import hmac
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.load_data import load_data
+from src.config import ADMIN_PASSWORD, DATA_SOURCE, ENABLE_ADMIN
+from src.database.connection import has_database_config
+from src.metrics.averages import build_average_ranking as compute_average_ranking
+from src.metrics.distribution import build_distribution as compute_distribution
+from src.metrics.formatting import format_compact, format_int, initials
+from src.metrics.rankings import build_general_ranking as compute_general_ranking
+from src.metrics.rankings import get_best_catches as compute_best_catches
+from src.metrics.states import build_state_stats as compute_state_stats
+from src.services.data_source import get_data_source_fingerprint, load_dashboard_data
+from src.services.admin_review import approve_record, list_pending_records, reject_record, update_pending_record
+from src.services.submissions import submit_player_record
 
 
 st.set_page_config(
@@ -16,94 +28,246 @@ st.set_page_config(
 )
 
 
-@st.cache_data(show_spinner=False)
-def get_data():
-    return load_data().sort_values(["nickname", "date"]).reset_index(drop=True)
+@st.cache_data(show_spinner=False, ttl=300)
+def get_data(_fingerprint):
+    return load_dashboard_data().data
 
 
 @st.cache_data(show_spinner=False)
 def get_best_catches(data):
-    if data.empty:
-        return pd.DataFrame(columns=["id_jogador", "nickname", "state", "catches", "date", "position"])
-
-    idx = data.groupby("id_jogador")["catches"].idxmax()
-    base = data.loc[idx, ["id_jogador", "nickname", "state", "catches", "date"]].copy()
-    base = base.sort_values("catches", ascending=False).reset_index(drop=True)
-    base["position"] = np.arange(1, len(base) + 1)
-    return base
+    return compute_best_catches(data)
 
 
 @st.cache_data(show_spinner=False)
-def calculate_daily_averages(data, apenas_mensais):
-    frames = []
+def build_general_ranking(data):
+    return compute_general_ranking(data)
 
-    for _, group in data.groupby("id_jogador", sort=False):
-        group = group.sort_values("date").reset_index(drop=True)
-        size = len(group)
 
-        if size < 2:
-            continue
+@st.cache_data(show_spinner=False)
+def build_average_ranking(data, somente_melhor, apenas_mensais):
+    return compute_average_ranking(data, somente_melhor, apenas_mensais)
 
-        starts, ends = np.triu_indices(size, k=1)
-        dates = group["date"].to_numpy()
-        catches = group["catches"].to_numpy()
 
-        dias = ((dates[ends] - dates[starts]) / np.timedelta64(1, "D")).astype(int)
-        ganho = catches[ends] - catches[starts]
+@st.cache_data(show_spinner=False)
+def build_state_stats(base, order_by="Total capturas"):
+    return compute_state_stats(base, order_by)
 
-        mask = (dias > 0) & (ganho > 0)
-        if apenas_mensais:
-            mask &= dias <= 32
 
-        if not mask.any():
-            continue
-
-        starts = starts[mask]
-        ends = ends[mask]
-        dias = dias[mask]
-        ganho = ganho[mask]
-
-        frames.append(pd.DataFrame({
-            "nickname": group["nickname"].iloc[-1],
-            "state": group["state"].iloc[0],
-            "media": (ganho / dias).astype(int),
-            "data_inicial": pd.Series(dates[starts]).dt.date,
-            "data_final": pd.Series(dates[ends]).dt.date,
-            "dias": dias,
-            "catches_periodo": ganho,
-        }))
-
-    if not frames:
-        return pd.DataFrame(columns=[
-            "nickname", "state", "media", "data_inicial",
-            "data_final", "dias", "catches_periodo"
-        ])
-
-    return pd.concat(frames, ignore_index=True)
+@st.cache_data(show_spinner=False)
+def build_distribution(base):
+    return compute_distribution(base)
 
 
 def ui_html(markup):
     st.html(markup)
 
 
-def format_int(value):
-    return f"{int(value):,}".replace(",", ".")
+def clear_dashboard_caches():
+    get_data.clear()
+    get_best_catches.clear()
+    build_general_ranking.clear()
+    build_average_ranking.clear()
+    build_state_stats.clear()
+    build_distribution.clear()
 
 
-def format_compact(value):
-    value = int(value)
-    if value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.1f}B".replace(".", ",")
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M".replace(".", ",")
-    if value >= 1_000:
-        return f"{value / 1_000:.0f}k"
-    return str(value)
+def render_public_submission_page():
+    st.title("Enviar dados")
+    st.caption("Envie seu registro para revisao. Ele so aparece no ranking depois da aprovacao do admin.")
+
+    if DATA_SOURCE != "database":
+        st.warning("Envio publico indisponivel no modo Excel. Ative DATA_SOURCE=database para usar este formulario.")
+        return
+    if not has_database_config():
+        st.warning("Envio publico indisponivel: banco de dados nao configurado.")
+        return
+
+    last_result = st.session_state.pop("public_submission_result", None)
+    if last_result:
+        if last_result.get("success"):
+            st.success("Registro enviado para revisao.")
+            st.info("O envio ficou como pendente. Depois da aprovacao do admin, ele entra no dashboard.")
+        else:
+            st.error("; ".join(last_result.get("errors", ["Nao foi possivel enviar o registro."])))
+
+    with st.form("public_submission_form", clear_on_submit=True):
+        nickname = st.text_input("Nickname")
+        state = st.text_input("Estado")
+        data_referencia = st.date_input("Data do registro", value=date.today())
+        catches = st.number_input("Total de capturas", min_value=1, step=1)
+        periodo_tipo = st.selectbox("Tipo de periodo", ["mensal", "semanal"], index=0)
+        contato = st.text_input("Contato opcional")
+        observacao = st.text_area("Observacao opcional", max_chars=500)
+        submitted = st.form_submit_button("Enviar para revisao")
+
+    if submitted:
+        result = submit_player_record({
+            "nickname": nickname,
+            "state": state,
+            "data_referencia": data_referencia,
+            "catches": int(catches),
+            "periodo_tipo": periodo_tipo,
+            "status": "pendente",
+            "fonte": "site",
+            "contato_envio": contato,
+            "observacao": observacao,
+        })
+        st.session_state.public_submission_result = result
+        st.rerun()
 
 
-def initials(name):
-    cleaned = "".join(part[0] for part in str(name).replace("_", " ").split() if part)
-    return (cleaned[:2] or "BR").upper()
+def render_admin_sidebar():
+    if not ENABLE_ADMIN or not ADMIN_PASSWORD:
+        return
+
+    with st.sidebar.expander("Admin", expanded=False):
+        last_result = st.session_state.pop("admin_last_result", None)
+        if last_result:
+            if last_result.get("success"):
+                if "jogador_criado" in last_result:
+                    acao = "criado" if last_result.get("jogador_criado") else "encontrado"
+                    st.success(
+                        f"Registro inserido. Jogador {acao}. "
+                        f"ID jogador: {last_result.get('jogador_id')} | "
+                        f"ID registro: {last_result.get('record_id')} | "
+                        f"Status: {last_result.get('status')}"
+                    )
+                else:
+                    st.success(
+                        f"Ação aplicada no registro {last_result.get('record_id')}. "
+                        f"Status: {last_result.get('status', 'pendente')}"
+                    )
+            else:
+                st.error("; ".join(last_result.get("errors", ["Erro ao salvar registro."])))
+
+        if not has_database_config():
+            st.warning("Admin indisponível: banco não configurado.")
+            return
+
+        password = st.text_input("Senha admin", type="password", key="admin_password_input")
+        if not password:
+            return
+        if not hmac.compare_digest(password, ADMIN_PASSWORD):
+            st.error("Senha inválida.")
+            return
+
+        st.markdown("##### Novo registro")
+        with st.form("admin_insert_record_form", clear_on_submit=True):
+            nickname = st.text_input("Nickname")
+            state = st.text_input("Estado")
+            data_referencia = st.date_input("Data do registro", value=date.today())
+            catches = st.number_input("Total de capturas", min_value=1, step=1)
+            periodo_tipo = st.selectbox("Tipo de período", ["mensal", "semanal"], index=0)
+            status = st.selectbox("Status", ["validado", "pendente"], index=0)
+            observacao = st.text_area("Observação opcional")
+            submitted = st.form_submit_button("Salvar registro")
+
+        if submitted:
+            result = submit_player_record({
+                "nickname": nickname,
+                "state": state,
+                "data_referencia": data_referencia,
+                "catches": int(catches),
+                "periodo_tipo": periodo_tipo,
+                "status": status,
+                "fonte": "admin",
+                "observacao": observacao,
+            }, allow_validated=True)
+            if result.get("success"):
+                clear_dashboard_caches()
+            st.session_state.admin_last_result = result
+            st.rerun()
+
+        st.divider()
+        st.markdown("##### Registros pendentes")
+
+        try:
+            pending_records = list_pending_records()
+        except Exception as exc:
+            st.error(f"Erro ao carregar pendentes: {exc}")
+            return
+
+        if not pending_records:
+            st.caption("Nenhum registro pendente.")
+            return
+
+        pending_table = pd.DataFrame(pending_records)
+        preview_columns = [
+            "id", "nickname", "state", "data_referencia", "catches",
+            "periodo_tipo", "contato_envio", "observacao", "created_at", "status",
+        ]
+        st.dataframe(pending_table[preview_columns], hide_index=True, use_container_width=True)
+
+        labels = [
+            f"#{row['id']} · {row['nickname']} · {row['data_referencia']} · {format_int(row['catches'])}"
+            for row in pending_records
+        ]
+        selected_label = st.selectbox("Selecionar registro", labels, key="admin_pending_select")
+        selected_index = labels.index(selected_label)
+        record = pending_records[selected_index]
+        record_id = int(record["id"])
+
+        with st.form("admin_review_record_form"):
+            edited_state = st.text_input("Estado", value=str(record["state"] or ""), key=f"state_{record_id}")
+            edited_date = st.date_input("Data", value=record["data_referencia"], key=f"date_{record_id}")
+            edited_catches = st.number_input(
+                "Total de capturas",
+                min_value=1,
+                value=int(record["catches"]),
+                step=1,
+                key=f"catches_{record_id}",
+            )
+            edited_period = st.selectbox(
+                "Tipo de período",
+                ["mensal", "semanal"],
+                index=["mensal", "semanal"].index(record["periodo_tipo"]),
+                key=f"period_{record_id}",
+            )
+            edited_note = st.text_area(
+                "Observação",
+                value=str(record.get("observacao") or ""),
+                key=f"note_{record_id}",
+            )
+            st.text_input(
+                "Contato informado",
+                value=str(record.get("contato_envio") or ""),
+                disabled=True,
+                key=f"contact_{record_id}",
+            )
+            admin_note = st.text_area("Nota do admin", key=f"admin_note_{record_id}")
+            action = st.radio(
+                "Ação",
+                ["Apenas salvar edição", "Aprovar", "Rejeitar", "Excluir logicamente"],
+                horizontal=False,
+                key=f"action_{record_id}",
+            )
+            review_submitted = st.form_submit_button("Aplicar")
+
+        if review_submitted:
+            update_result = update_pending_record(
+                record_id,
+                {
+                    "state": edited_state,
+                    "data_referencia": edited_date,
+                    "catches": int(edited_catches),
+                    "periodo_tipo": edited_period,
+                    "observacao": edited_note,
+                    "admin_note": admin_note,
+                },
+            )
+            result = update_result
+            if update_result.get("success") and action == "Aprovar":
+                result = approve_record(record_id, admin_note=admin_note)
+            elif update_result.get("success") and action in {"Rejeitar", "Excluir logicamente"}:
+                note = admin_note
+                if action == "Excluir logicamente":
+                    note = f"{admin_note}\nExclusão lógica solicitada pelo admin.".strip()
+                result = reject_record(record_id, admin_note=note)
+
+            if result.get("success"):
+                clear_dashboard_caches()
+            st.session_state.admin_last_result = result
+            st.rerun()
 
 
 def trainer_avatar(name, place):
@@ -1747,40 +1911,6 @@ def render_chart(data, player_options, default_players):
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True})
 
 
-def build_general_ranking(data):
-    if data.empty:
-        return pd.DataFrame(columns=["#", "Jogador", "Estado", "Capturas", "Dias ativo"])
-
-    idx = data.groupby("id_jogador")["catches"].idxmax()
-    ranking = data.loc[idx, ["id_jogador", "nickname", "state", "catches"]].sort_values("catches", ascending=False).reset_index(drop=True)
-    active_days = data.groupby("id_jogador")["date"].agg(lambda x: max((x.max() - x.min()).days, 1)).to_dict()
-    ranking["#"] = np.arange(1, len(ranking) + 1)
-    ranking["Jogador"] = ranking["nickname"]
-    ranking["Estado"] = ranking["state"]
-    ranking["Capturas"] = ranking["catches"].map(format_int)
-    ranking["Dias ativo"] = ranking["id_jogador"].map(active_days).fillna(0).astype(int)
-    return ranking[["#", "Jogador", "Estado", "Capturas", "Dias ativo"]]
-
-
-def build_average_ranking(data, somente_melhor, apenas_mensais):
-    df_media = calculate_daily_averages(data, apenas_mensais)
-
-    if df_media.empty:
-        return pd.DataFrame(columns=["#", "Jogador", "Estado", "Média", "Período", "Dias"])
-
-    if somente_melhor:
-        df_media = df_media.sort_values("media", ascending=False).groupby("nickname").head(1)
-
-    df_media = df_media.sort_values("media", ascending=False).reset_index(drop=True)
-    df_media["#"] = np.arange(1, len(df_media) + 1)
-    df_media["Jogador"] = df_media["nickname"]
-    df_media["Estado"] = df_media["state"]
-    df_media["Média"] = df_media["media"].map(format_int)
-    df_media["Período"] = df_media["data_inicial"].astype(str) + " - " + df_media["data_final"].astype(str)
-    df_media["Dias"] = df_media["dias"]
-    return df_media[["#", "Jogador", "Estado", "Média", "Período", "Dias"]]
-
-
 def table_html(data):
     if data.empty:
         return '<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>'
@@ -1870,42 +2000,6 @@ def render_filters(data):
     return filtered, somente_melhor, apenas_mensais
 
 
-def build_state_stats(base, order_by="Total capturas"):
-    if base.empty:
-        return pd.DataFrame(columns=[
-            "Estado", "Posição", "Jogadores", "Total", "Média",
-            "Melhor jogador", "Valor melhor jogador"
-        ])
-
-    rows = []
-    for state, group in base.groupby("state", dropna=True):
-        total = group["catches"].sum()
-        best = group.sort_values("catches", ascending=False).iloc[0]
-        rows.append({
-            "Estado": state,
-            "Jogadores": group["id_jogador"].nunique(),
-            "Total": total,
-            "Média": int(group["catches"].mean()),
-            "Melhor jogador": best["nickname"],
-            "Valor melhor jogador": best["catches"],
-        })
-
-    sort_columns = {
-        "Total capturas": "Total",
-        "Nº de jogadores": "Jogadores",
-        "Média": "Média",
-    }
-    sort_column = sort_columns.get(order_by, "Total")
-
-    stats = (
-        pd.DataFrame(rows)
-        .sort_values([sort_column, "Estado"], ascending=[False, True])
-        .reset_index(drop=True)
-    )
-    stats["Posição"] = np.arange(1, len(stats) + 1)
-    return stats
-
-
 def render_state_cards(stats):
     if stats.empty:
         ui_html('<div class="empty-state">Nenhum estado encontrado com os filtros atuais.</div>')
@@ -1941,14 +2035,6 @@ def render_state_cards(stats):
         """)
 
     ui_html(f'<div class="state-grid">{"".join(cards)}</div>')
-
-
-def build_distribution(base):
-    thresholds = [100_000, 300_000, 500_000, 700_000, 900_000, 1_000_000, 2_000_000]
-    labels = ["100k+", "300k+", "500k+", "700k+", "900k+", "1M+", "2M+"]
-    catches = base["catches"].to_numpy()
-    counts = [int((catches >= threshold).sum()) for threshold in thresholds]
-    return pd.DataFrame({"Faixa": labels, "Jogadores": counts})
 
 
 def render_distribution(distribution):
@@ -2001,10 +2087,23 @@ if "dark_theme" not in st.session_state:
     st.session_state.dark_theme = True
 
 inject_css(st.session_state.dark_theme)
+page_param = str(st.query_params.get("page", "")).strip().lower()
+default_page = "Enviar dados" if page_param in {"enviar", "enviar-dados", "submit"} else "Dashboard"
+current_page = st.sidebar.radio(
+    "Pagina",
+    ["Dashboard", "Enviar dados"],
+    index=["Dashboard", "Enviar dados"].index(default_page),
+)
+
+if current_page == "Enviar dados":
+    render_public_submission_page()
+    st.stop()
+
 render_navbar()
+render_admin_sidebar()
 
 with st.spinner("Carregando ranking..."):
-    df = get_data()
+    df = get_data(get_data_source_fingerprint())
     base_all = get_best_catches(df)
 
 render_hero(base_all, df)

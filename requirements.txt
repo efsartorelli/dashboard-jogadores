@@ -1,5 +1,7 @@
-streamlit
-pandas
-numpy
-plotly
-openpyxl
+streamlit==1.57.0
+pandas==3.0.2
+numpy==2.4.4
+plotly==6.7.0
+openpyxl==3.1.5
+psycopg[binary]==3.2.13
+python-dotenv
