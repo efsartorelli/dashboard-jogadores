@@ -444,11 +444,11 @@ def inject_css(dark_mode):
 
     .block-container {{
         max-width: 1480px;
-        padding: 2rem 1.55rem 4rem !important;
+        padding: 4.75rem 1.55rem 4rem !important;
     }}
 
     section.main > div {{
-        padding-top: 4rem !important;
+        padding-top: 0 !important;
     }}
 
     .section-anchor {{
@@ -457,7 +457,7 @@ def inject_css(dark_mode):
 
     .st-key-navbar {{
         position: sticky;
-        top: 0.35rem;
+        top: 3.35rem;
         z-index: 80;
         margin: 0 0 0.75rem;
         padding: 0.72rem 1rem;
