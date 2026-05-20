@@ -1,284 +1,155 @@
 # Ranking BR - Pokemon GO
 
-Dashboard Streamlit para acompanhar rankings de jogadores, capturas totais,
-evolucao historica, medias diarias, estatisticas por estado e distribuicao por
-faixas de captura.
+Dashboard Streamlit + Supabase para rankings de jogadores brasileiros, agora
+estruturado como uma plataforma SaaS com autenticacao, perfil, curadoria manual,
+limites mensais, plano premium e camada modular de pagamentos.
 
-## Como rodar em modo Excel
+O visual do dashboard principal foi preservado. As novas funcionalidades ficam
+em paginas autenticadas: `Dashboard`, `Perfil` e `Premium`.
+
+## Stack
+
+- Streamlit
+- Supabase Auth
+- Supabase Postgres
+- Python
+- Psycopg
+- Plotly/Pandas
+
+## Rodando localmente
 
 ```powershell
 pip install -r requirements.txt
-streamlit run app.py
-```
-
-O app usa o arquivo `data/nofullautoinsidebuildings.xlsx` como fonte legada.
-Execute os comandos a partir da raiz do projeto para que o caminho do arquivo
-seja resolvido corretamente.
-
-Tambem e possivel forcar a fonte Excel:
-
-```powershell
-$env:DATA_SOURCE="excel"
 python -m streamlit run app.py
 ```
 
-## Como rodar em modo banco
+Copie `.env.example` para `.env` e preencha os valores reais:
 
-Configure `DATABASE_URL` com uma URL PostgreSQL/Supabase. Nao coloque essa URL
-no codigo.
-
-```powershell
-$env:DATABASE_URL="postgresql://usuario:senha@host:5432/database"
-$env:DATA_SOURCE="database"
-python -m streamlit run app.py
+```txt
+DATABASE_URL=postgresql://postgres:SUA_SENHA@db.seu-projeto.supabase.co:5432/postgres
+DATA_SOURCE=database
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_ANON_KEY=
 ```
 
-Valores aceitos para `DATA_SOURCE`:
+`DATA_SOURCE=database` e as chaves do Supabase Auth sao obrigatorios para o
+fluxo SaaS. O modo `excel` continua existindo para manutencao do legado, mas a
+aplicacao autenticada de producao deve usar banco.
 
-- `excel`: usa sempre o Excel legado.
-- `database`: exige banco configurado.
-- `auto`: tenta banco quando `DATABASE_URL` existe; se falhar, usa Excel.
+## Supabase
 
-Se `DATA_SOURCE` nao for definido, o padrao e `auto`.
-
-## Configuracao de ambiente e secrets
-
-O projeto le configuracoes nesta ordem:
-
-1. variaveis de ambiente do sistema;
-2. `.env` local, quando existir;
-3. `st.secrets`, usado pelo Streamlit Cloud;
-4. fallback seguro.
-
-Variaveis usadas:
-
-- `DATABASE_URL`: URL PostgreSQL/Supabase.
-- `DATA_SOURCE`: `excel`, `database` ou `auto`.
-- `ENABLE_ADMIN`: `true` ou `false`.
-- `ADMIN_PASSWORD`: senha da area admin, obrigatoria quando `ENABLE_ADMIN=true`.
-
-Arquivos importantes:
-
-- `.env`: apenas local, nunca versionar.
-- `.env.example`: exemplo seguro, sem senha real.
-- `.streamlit/secrets.toml`: secrets locais do Streamlit, tambem ignorado pelo Git.
-- `.streamlit/config.toml`: tema e opcoes seguras do Streamlit.
-
-Exemplo seguro para `st.secrets` no Streamlit Cloud:
-
-```toml
-DATABASE_URL = "postgresql://postgres:SUA_SENHA@db.seu-projeto.supabase.co:5432/postgres"
-DATA_SOURCE = "database"
-ENABLE_ADMIN = "false"
-ADMIN_PASSWORD = "SUA_SENHA_ADMIN_FORTE"
-```
-
-## Como preparar o banco
-
-Execute o schema em `database/schema.sql` no PostgreSQL/Supabase.
-
-Para bancos ja existentes, execute tambem:
+Execute no SQL Editor, nesta ordem:
 
 ```sql
-\i database/migrations/001_production_hardening.sql
+-- schema base para projetos novos
+-- cole database/schema.sql
+
+-- hardening de duplicidade e indices
+-- cole database/migrations/001_production_hardening.sql
+
+-- camada SaaS: Auth, profiles, RLS, limites, pagamentos
+-- cole database/migrations/002_saas_auth_premium_payments.sql
+
+-- curadoria admin-only para bancos que ja aplicaram a 002
+-- cole database/migrations/003_admin_only_curation.sql
+
+-- nickname e localidade do perfil
+-- cole database/migrations/004_user_profile_landing_location.sql
 ```
 
-No Supabase, cole o conteudo desse arquivo no SQL Editor. A migration troca a
-duplicidade global por indice unico parcial: apenas registros `pendente` e
-`validado` bloqueiam nova submissao para o mesmo jogador, tipo e data. Registros
-`rejeitado` continuam no historico/auditoria.
-
-Depois, importe o Excel legado:
+Depois importe o Excel legado, se necessario:
 
 ```powershell
 python -c "from src.services.import_excel_to_db import import_excel_to_db; print(import_excel_to_db())"
 ```
 
-Esse comando usa `DATABASE_URL`, insere jogadores, insere registros historicos e
-ignora duplicidades por jogador, tipo de periodo e data.
+### Roles
 
-## Estrutura atual
+Novos usuarios entram como `jogador`. Para liberar curadoria, ajuste no banco:
+
+```sql
+update usuarios set role = 'admin' where email = 'seu-email@dominio.com';
+```
+
+## Fluxo da aplicacao
+
+1. Usuario cria conta ou entra via Supabase Auth.
+2. Streamlit valida/renova o token e cria/atualiza o profile em `usuarios`.
+3. `Dashboard` carrega apenas dados globais validados.
+4. `Perfil` mostra dados da conta, nickname, localidade, limite mensal, historico e envio de inputs.
+5. Envios entram como `pendente`, vinculados ao `auth.users.id`.
+6. Moderadores aprovam/rejeitam na aba `Curadoria` dentro do Perfil.
+7. Apenas registros `validado` alimentam rankings e metricas.
+
+## Limites e seguranca
+
+- Free: `FREE_MONTHLY_INPUT_LIMIT=5`.
+- Premium: `PREMIUM_MONTHLY_INPUT_LIMIT=50` por padrao.
+- O limite e validado no Streamlit e tambem no banco por trigger.
+- RLS protege profiles, inputs, pagamentos e logs.
+- Usuarios comuns veem apenas o proprio historico no Perfil.
+- Dados globais do dashboard usam apenas registros aprovados.
+- Rate limiting de envios usa `security_events`.
+- Secrets ficam em variaveis de ambiente ou `st.secrets`.
+
+## Pagamentos
+
+A camada esta preparada para `manual`, `cacto`, `pagseguro` e `stripe`.
+
+Variaveis principais:
 
 ```txt
-app.py                     # camada Streamlit e componentes visuais
-src/config.py              # caminhos centrais do projeto
-src/data/loaders.py        # leitura e normalizacao do Excel legado
-src/metrics/               # rankings, medias, estados, faixas e formatacao
-src/validation/            # validacao de futuros inputs pelo site/API
-src/database/              # conexao PostgreSQL e repositorios
-src/services/              # fonte de dados, importacao e submissao de registros
-database/schema.sql        # modelo relacional proposto para producao
-docs/production-architecture.md
-tests/test_metrics.py      # regressao das regras atuais
+PAYMENT_PROVIDER=cacto
+PAYMENT_CHECKOUT_URL=https://checkout.externo/...
+PAYMENT_WEBHOOK_SECRET=
+PAYMENT_SUCCESS_URL=https://seu-app/premium?status=success
+PAYMENT_CANCEL_URL=https://seu-app/premium?status=cancel
 ```
 
-## Regras preservadas
+Fluxo:
 
-- Apenas jogadores com `MOSTRAR == YES` entram no dashboard.
-- O ranking geral usa a maior quantidade registrada de capturas por jogador.
-- A media diaria usa todos os pares positivos de datas por jogador.
-- `Apenas mensais` significa pares com ate 32 dias.
-- Os filtros por nickname e estado preservam o comportamento visual atual.
+1. Usuario clica em `Fazer upgrade`.
+2. App cria um registro em `pagamentos` com `external_reference`.
+3. Usuario vai para checkout externo.
+4. Provedor chama a camada `src.services.payment_webhooks.handle_payment_webhook`.
+5. Webhook assinado marca pagamento como `paid`.
+6. `usuarios.is_premium=true` e `premium_status='premium'`.
 
-## Caminho para producao
+Em producao, exponha o handler de webhook em uma API pequena separada
+(FastAPI, Supabase Edge Function ou serverless). O Streamlit nao deve receber
+webhooks diretamente.
 
-A base foi separada para permitir a proxima etapa:
+## Deploy
 
-1. importar o Excel para PostgreSQL;
-2. receber inputs por API/site;
-3. validar e auditar registros;
-4. processar rankings em jobs;
-5. servir o dashboard a partir de snapshots pre-calculados.
-
-O schema inicial esta em `database/schema.sql` e a proposta de arquitetura esta
-em `docs/production-architecture.md`.
-
-## Input futuro pelo site/API
-
-A base de servico ja existe em `src/services/submissions.py`. A funcao principal
-e `submit_player_record(payload)`, que valida o payload, evita duplicidade e
-salva como registro `pendente` para revisao/processamento.
-
-## Envio publico de dados
-
-O formulario publico fica separado do dashboard principal. Ele aparece na
-navegacao lateral como `Enviar dados` e tambem pode ser aberto com
-`?page=enviar-dados`.
-
-Esse fluxo so funciona em modo banco:
+1. Configure as variaveis de `.env.example` no ambiente de deploy.
+2. Aplique todas as migrations no Supabase.
+3. Rode `python scripts/production_check.py`.
+4. Inicie com:
 
 ```powershell
-$env:DATA_SOURCE="database"
-python -m streamlit run app.py
+python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
-Campos do envio publico:
-
-- nickname
-- estado (UF)
-- data do registro
-- total de capturas
-- contato opcional
-- observacao opcional
-
-Todo envio publico entra obrigatoriamente como `pendente`. O jogador nao escolhe
-status, nao escolhe tipo de periodo e nao consegue aprovar o proprio registro.
-O tipo de periodo publico e sempre `mensal`. O servico bloqueia duplicidade
-pendente ou validada para o mesmo jogador, data e tipo de periodo.
-
-Fluxo completo:
-
-1. jogador envia o registro em `Enviar dados`;
-2. sistema salva como `pendente`;
-3. admin revisa em `Admin` > `Registros pendentes`;
-4. admin aprova para `validado` ou rejeita para `rejeitado`;
-5. apenas registros `validado` entram no dashboard, rankings e metricas.
-
-## Area administrativa no Streamlit
-
-A area admin e opcional e nao aparece quando `ENABLE_ADMIN=false`. Para ativar, configure no
-arquivo `.env` local:
+## Estrutura
 
 ```txt
-ENABLE_ADMIN=true
-ADMIN_PASSWORD=uma_senha_forte
+app.py                       # UI Streamlit e dashboard preservado
+src/auth/                    # Supabase Auth REST client e sessao
+src/database/                # conexao e repositorios SQL parametrizados
+src/services/                # regras de negocio, users, pagamentos, inputs
+src/payments/                # adapters Cacto/PagSeguro/Stripe/manual
+src/metrics/                 # metricas e rankings existentes
+src/validation/              # sanitizacao e validacao dos inputs
+database/migrations/         # migrations de producao
+scripts/production_check.py  # checklist de deploy
 ```
-
-Nao coloque `ADMIN_PASSWORD` no Git. O arquivo `.env` ja esta no `.gitignore`.
-
-Com o app rodando em modo banco, abra `Admin` na navegacao lateral. Digite a
-senha e preencha:
-
-- nickname
-- estado
-- data do registro
-- total de capturas
-- tipo de periodo: `mensal` ou `semanal`
-- status: `validado` ou `pendente`
-- observacao opcional
-
-Registros com status `validado` entram no dashboard. Registros `pendente` ficam
-salvos para revisao e nao entram nos rankings atuais. O fluxo publico futuro
-continua usando `pendente` por padrao.
-
-### Revisao de pendentes
-
-Na mesma area `Admin`, a secao `Registros pendentes` lista os envios com status
-`pendente`. O admin pode:
-
-- ver contato informado e observacao do envio;
-- editar estado, data, capturas, periodo e observacao;
-- aprovar, mudando o status para `validado`;
-- rejeitar, mudando o status para `rejeitado`;
-- fazer exclusao logica, que tambem marca como `rejeitado` e registra auditoria.
-
-Status:
-
-- `pendente`: salvo, aguardando revisao, nao entra no dashboard.
-- `validado`: aprovado, entra nos rankings e metricas.
-- `rejeitado`: recusado, mantido para historico/auditoria, nao entra no dashboard.
-
-Toda aprovacao, rejeicao ou edicao registra auditoria em `auditoria_registros`.
-
-## Deploy no Streamlit Cloud
-
-1. Suba o repositorio sem `.env` e sem `.streamlit/secrets.toml`.
-2. No Supabase, execute `database/schema.sql`.
-3. Importe os dados legados, se necessario:
-
-```powershell
-python -c "from src.services.import_excel_to_db import import_excel_to_db; print(import_excel_to_db())"
-```
-
-4. No Streamlit Cloud, crie o app apontando para `app.py`.
-5. Em `App settings` > `Secrets`, configure:
-
-```toml
-DATABASE_URL = "postgresql://postgres:SUA_SENHA@db.seu-projeto.supabase.co:5432/postgres"
-DATA_SOURCE = "database"
-ENABLE_ADMIN = "true"
-ADMIN_PASSWORD = "SUA_SENHA_ADMIN_FORTE"
-```
-
-6. Faça o deploy.
-7. Acesse o dashboard normalmente.
-8. Use `Enviar dados` para submissao publica.
-9. Use `Admin` para aprovar ou rejeitar registros pendentes.
-
-Para deploy publico sem admin, use:
-
-```toml
-ENABLE_ADMIN = "false"
-```
-
-Nesse caso, os envios publicos continuam entrando como `pendente`, mas a revisao
-precisa ser feita por outro ambiente com admin habilitado.
-
-## Checklist de producao
-
-Antes de publicar, rode:
-
-```powershell
-python -m unittest discover -s tests
-python scripts/production_check.py
-python scripts/test_database_connection.py
-```
-
-O `production_check.py` verifica:
-
-- variaveis de ambiente principais;
-- conexao com o banco;
-- tabelas principais;
-- quantidade de jogadores;
-- quantidade de registros;
-- existencia de pelo menos um registro `validado`;
-- se `.env` nao esta versionado;
-- se `.env.example` parece seguro.
-- se nao ha duplicidade ativa por jogador/data/tipo.
-- se a migration de indice unico parcial ja foi aplicada ao banco.
 
 ## Testes
 
 ```powershell
 python -m unittest discover -s tests
+python scripts/production_check.py
 ```
+
+`production_check.py` exige banco e variaveis reais para passar em modo
+producao. Em desenvolvimento sem Supabase completo, use os testes unitarios.

@@ -2,7 +2,13 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
-from src.services.admin_review import approve_record, list_pending_records, reject_record, update_pending_record
+from src.services.admin_review import (
+    approve_record,
+    list_curation_records,
+    list_pending_records,
+    reject_record,
+    update_pending_record,
+)
 
 
 class FakeConn:
@@ -40,6 +46,37 @@ class AdminReviewTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["status"], "pendente")
 
+    def test_list_curation_records_requires_admin(self):
+        conn = FakeConn()
+        with patch("src.services.admin_review.buscar_usuario_por_id", return_value={"role": "jogador"}), \
+            patch("src.services.admin_review.listar_registros_curadoria") as list_records:
+            result = list_curation_records("00000000-0000-0000-0000-000000000001", conn=conn)
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["records"], [])
+        list_records.assert_not_called()
+
+    def test_list_curation_records_supports_pagination_for_admin(self):
+        conn = FakeConn()
+        with patch("src.services.admin_review.buscar_usuario_por_id", return_value={"role": "admin"}), \
+            patch("src.services.admin_review.contar_registros_curadoria", return_value=1) as count_records, \
+            patch("src.services.admin_review.listar_registros_curadoria", return_value=[PENDING_RECORD]) as list_records:
+            result = list_curation_records(
+                "00000000-0000-0000-0000-000000000001",
+                status="pending",
+                search="kendo",
+                page=2,
+                page_size=10,
+                conn=conn,
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["records"][0]["status"], "pendente")
+        count_records.assert_called_once()
+        self.assertEqual(list_records.call_args.kwargs["status"], "pendente")
+        self.assertEqual(list_records.call_args.kwargs["offset"], 20)
+
     def test_approve_record_changes_status_and_audits(self):
         conn = FakeConn()
         with patch("src.services.admin_review.buscar_registro_por_id", return_value=PENDING_RECORD), \
@@ -52,6 +89,21 @@ class AdminReviewTest(unittest.TestCase):
         change_status.assert_called_once_with(conn, 10, "validado")
         self.assertEqual(audit.call_args.args[2], "aprovado")
         self.assertEqual(conn.commits, 1)
+
+    def test_approve_record_requires_admin_when_enabled(self):
+        conn = FakeConn()
+        with patch("src.services.admin_review.buscar_usuario_por_id", return_value={"role": "moderador"}), \
+            patch("src.services.admin_review.buscar_registro_por_id") as get_record:
+            result = approve_record(
+                10,
+                admin_user_id="00000000-0000-0000-0000-000000000001",
+                require_admin=True,
+                conn=conn,
+            )
+
+        self.assertFalse(result["success"])
+        self.assertTrue(any("administradores" in error for error in result["errors"]))
+        get_record.assert_not_called()
 
     def test_reject_record_changes_status_and_audits(self):
         conn = FakeConn()

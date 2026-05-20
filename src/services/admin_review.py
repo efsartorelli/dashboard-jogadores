@@ -6,8 +6,12 @@ from typing import Any
 from src.database.connection import get_connection
 from src.database.repositories import (
     alterar_status_registro,
+    atualizar_curadoria_registro,
     atualizar_registro,
     buscar_registro_por_id,
+    buscar_usuario_por_id,
+    contar_registros_curadoria,
+    listar_registros_curadoria,
     listar_registros_pendentes,
     registrar_auditoria,
     verificar_duplicidade_registro,
@@ -33,6 +37,19 @@ def _audit_payload(record: dict[str, Any] | None, admin_note: str | None = None)
     return payload
 
 
+def _is_admin_user(conn, admin_user_id: str | None) -> bool:
+    if not admin_user_id:
+        return False
+    profile = buscar_usuario_por_id(conn, admin_user_id)
+    return str((profile or {}).get("role") or "").lower() == "admin"
+
+
+def _require_admin_user(conn, admin_user_id: str | None) -> dict[str, Any] | None:
+    if _is_admin_user(conn, admin_user_id):
+        return None
+    return {"success": False, "errors": ["Acesso restrito a administradores."]}
+
+
 def list_pending_records(conn=None) -> list[dict[str, Any]]:
     owns_connection = conn is None
     context = get_connection() if owns_connection else None
@@ -45,12 +62,69 @@ def list_pending_records(conn=None) -> list[dict[str, Any]]:
             context.__exit__(None, None, None)
 
 
-def approve_record(record_id: int, admin_note: str | None = None, conn=None) -> dict[str, Any]:
+def list_curation_records(
+    admin_user_id: str,
+    status: str = "pendente",
+    search: str | None = None,
+    order_by: str = "created_at",
+    order_direction: str = "asc",
+    page: int = 0,
+    page_size: int = 20,
+    conn=None,
+) -> dict[str, Any]:
     owns_connection = conn is None
     context = get_connection() if owns_connection else None
     if owns_connection:
         conn = context.__enter__()
     try:
+        denied = _require_admin_user(conn, admin_user_id)
+        if denied:
+            return {**denied, "records": [], "total": 0}
+
+        normalized_status = {
+            "pending": "pendente",
+            "approved": "validado",
+            "rejected": "rejeitado",
+            "pendente": "pendente",
+            "validado": "validado",
+            "rejeitado": "rejeitado",
+        }.get(str(status).strip().lower(), "pendente")
+        page_size = max(5, min(int(page_size), 50))
+        page = max(0, int(page))
+        search = sanitize_text(search, max_length=120)
+        total = contar_registros_curadoria(conn, normalized_status, search=search or None)
+        records = listar_registros_curadoria(
+            conn,
+            status=normalized_status,
+            search=search or None,
+            order_by=order_by,
+            order_direction=order_direction,
+            limit=page_size,
+            offset=page * page_size,
+        )
+        return {"success": True, "errors": [], "records": records, "total": total}
+    finally:
+        if owns_connection and context is not None:
+            context.__exit__(None, None, None)
+
+
+def approve_record(
+    record_id: int,
+    admin_note: str | None = None,
+    admin_user_id: str | None = None,
+    require_admin: bool = False,
+    conn=None,
+) -> dict[str, Any]:
+    owns_connection = conn is None
+    context = get_connection() if owns_connection else None
+    if owns_connection:
+        conn = context.__enter__()
+    try:
+        if require_admin:
+            denied = _require_admin_user(conn, admin_user_id)
+            if denied:
+                return denied
+
         record = buscar_registro_por_id(conn, record_id)
         if not record:
             return {"success": False, "errors": ["Registro não encontrado."]}
@@ -75,9 +149,11 @@ def approve_record(record_id: int, admin_note: str | None = None, conn=None) -> 
 
         before = _audit_payload(record, admin_note)
         alterar_status_registro(conn, record_id, "validado")
+        if admin_user_id:
+            atualizar_curadoria_registro(conn, record_id, admin_user_id, admin_note)
         after = dict(before)
         after["status"] = "validado"
-        registrar_auditoria(conn, record_id, "aprovado", before, after)
+        registrar_auditoria(conn, record_id, "aprovado", before, after, usuario_id=admin_user_id)
         conn.commit()
         return {"success": True, "errors": [], "record_id": record_id, "status": "validado"}
     except Exception:
@@ -88,12 +164,23 @@ def approve_record(record_id: int, admin_note: str | None = None, conn=None) -> 
             context.__exit__(None, None, None)
 
 
-def reject_record(record_id: int, admin_note: str | None = None, conn=None) -> dict[str, Any]:
+def reject_record(
+    record_id: int,
+    admin_note: str | None = None,
+    admin_user_id: str | None = None,
+    require_admin: bool = False,
+    conn=None,
+) -> dict[str, Any]:
     owns_connection = conn is None
     context = get_connection() if owns_connection else None
     if owns_connection:
         conn = context.__enter__()
     try:
+        if require_admin:
+            denied = _require_admin_user(conn, admin_user_id)
+            if denied:
+                return denied
+
         record = buscar_registro_por_id(conn, record_id)
         if not record:
             return {"success": False, "errors": ["Registro não encontrado."]}
@@ -101,9 +188,11 @@ def reject_record(record_id: int, admin_note: str | None = None, conn=None) -> d
             return {"success": False, "errors": ["Apenas registros pendentes podem ser rejeitados."]}
         before = _audit_payload(record, admin_note)
         alterar_status_registro(conn, record_id, "rejeitado")
+        if admin_user_id:
+            atualizar_curadoria_registro(conn, record_id, admin_user_id, admin_note)
         after = dict(before)
         after["status"] = "rejeitado"
-        registrar_auditoria(conn, record_id, "rejeitado", before, after)
+        registrar_auditoria(conn, record_id, "rejeitado", before, after, usuario_id=admin_user_id)
         conn.commit()
         return {"success": True, "errors": [], "record_id": record_id, "status": "rejeitado"}
     except Exception:
@@ -114,12 +203,23 @@ def reject_record(record_id: int, admin_note: str | None = None, conn=None) -> d
             context.__exit__(None, None, None)
 
 
-def update_pending_record(record_id: int, payload: dict[str, Any], conn=None) -> dict[str, Any]:
+def update_pending_record(
+    record_id: int,
+    payload: dict[str, Any],
+    admin_user_id: str | None = None,
+    require_admin: bool = False,
+    conn=None,
+) -> dict[str, Any]:
     owns_connection = conn is None
     context = get_connection() if owns_connection else None
     if owns_connection:
         conn = context.__enter__()
     try:
+        if require_admin:
+            denied = _require_admin_user(conn, admin_user_id)
+            if denied:
+                return denied
+
         record = buscar_registro_por_id(conn, record_id)
         if not record:
             return {"success": False, "errors": ["Registro não encontrado."]}
@@ -161,8 +261,17 @@ def update_pending_record(record_id: int, payload: dict[str, Any], conn=None) ->
 
         before = _audit_payload(record, admin_note)
         atualizar_registro(conn, record_id, data_referencia, catches, periodo_tipo, state, observacao)
+        if admin_user_id:
+            atualizar_curadoria_registro(conn, record_id, admin_user_id, admin_note)
         updated = buscar_registro_por_id(conn, record_id)
-        registrar_auditoria(conn, record_id, "alterado", before, _audit_payload(updated, admin_note))
+        registrar_auditoria(
+            conn,
+            record_id,
+            "alterado",
+            before,
+            _audit_payload(updated, admin_note),
+            usuario_id=admin_user_id,
+        )
         conn.commit()
         return {"success": True, "errors": [], "record_id": record_id}
     except Exception:

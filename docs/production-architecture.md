@@ -6,11 +6,35 @@ API, jobs assíncronos e cache sem redesenhar a interface.
 
 ## Fluxo recomendado
 
-1. O usuário envia dados pelo site.
-2. A API valida nickname, período, data e capturas.
-3. O registro entra em `registros_periodicos` como `pendente` ou `validado`.
-4. Um job marca jogadores alterados e recalcula snapshots afetados.
-5. O dashboard consulta snapshots materializados e carrega séries detalhadas sob demanda.
+1. O usuario entra pelo Supabase Auth.
+2. O app cria ou atualiza `usuarios`, vinculado a `auth.users`.
+3. O usuario envia dados pelo Perfil.
+4. O backend valida nickname, periodo, data, capturas, rate limit e limite mensal.
+5. O registro entra em `registros_periodicos` como `pendente`.
+6. Moderadores revisam manualmente; aprovados viram `validado`, rejeitados ficam no historico.
+7. Um job futuro marca jogadores alterados e recalcula snapshots afetados.
+8. O dashboard consulta dados validados/snapshots e carrega series detalhadas sob demanda.
+
+## Camada SaaS
+
+- `usuarios`: profile, role, status premium e limite mensal.
+- `usuarios.nickname`, `usuarios.pais`, `usuarios.estado` e `usuarios.cidade`
+  identificam o jogador e a localidade usada nos envios.
+- `security_events`: rate limiting, antiflood e trilha de eventos sensiveis.
+- `pagamentos`: checkout externo, referencia idempotente, status e payload bruto.
+- `payment_webhook_logs`: logs idempotentes de webhooks assinados.
+- RLS protege dados pessoais, pagamentos, historico de inputs e escrita de curadoria.
+- A curadoria administrativa fica restrita a `role = 'admin'`.
+- Triggers impedem que usuarios comuns alterem `role`, `is_premium` ou limite mensal.
+- Trigger de insert em `registros_periodicos` bloqueia bypass do limite mensal no banco.
+
+## Pagamentos
+
+O Streamlit inicia o checkout e grava `pagamentos.external_reference`. A confirmacao
+deve chegar por um endpoint separado chamando
+`src.services.payment_webhooks.handle_payment_webhook(provider, raw_body, headers)`.
+Esse handler valida assinatura HMAC, evita duplicidade por `provider/event_id`,
+marca pagamentos pagos e ativa `usuarios.is_premium`.
 
 ## O que pré-calcular
 

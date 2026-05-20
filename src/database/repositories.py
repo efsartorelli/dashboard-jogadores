@@ -226,6 +226,107 @@ def listar_registros_pendentes(conn) -> list[dict[str, Any]]:
     )
 
 
+def contar_registros_curadoria(
+    conn,
+    status: str = "pendente",
+    search: str | None = None,
+) -> int:
+    where_clauses = ["r.status = %s"]
+    params: list[Any] = [status]
+    if search:
+        where_clauses.append(
+            """(
+                j.nickname_atual ILIKE %s
+                OR COALESCE(u.email, '') ILIKE %s
+                OR COALESCE(u.nome, '') ILIKE %s
+                OR COALESCE(r.observacao, '') ILIKE %s
+            )"""
+        )
+        search_param = f"%{search}%"
+        params.extend([search_param, search_param, search_param, search_param])
+
+    row = _fetchone(
+        conn,
+        f"""
+        SELECT COUNT(*) AS total
+        FROM registros_periodicos r
+        JOIN jogadores j ON j.id = r.jogador_id
+        LEFT JOIN usuarios u ON u.id = r.created_by
+        WHERE {" AND ".join(where_clauses)}
+        """,
+        tuple(params),
+    )
+    return int(row["total"]) if row else 0
+
+
+def listar_registros_curadoria(
+    conn,
+    status: str = "pendente",
+    search: str | None = None,
+    order_by: str = "created_at",
+    order_direction: str = "asc",
+    limit: int = 20,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    order_columns = {
+        "created_at": "r.created_at",
+        "data_referencia": "r.data_referencia",
+        "catches": "r.catches",
+        "nickname": "j.nickname_atual",
+        "email": "u.email",
+        "periodo_tipo": "r.periodo_tipo",
+    }
+    order_sql = order_columns.get(order_by, "r.created_at")
+    direction_sql = "DESC" if str(order_direction).lower() == "desc" else "ASC"
+    where_clauses = ["r.status = %s"]
+    params: list[Any] = [status]
+    if search:
+        where_clauses.append(
+            """(
+                j.nickname_atual ILIKE %s
+                OR COALESCE(u.email, '') ILIKE %s
+                OR COALESCE(u.nome, '') ILIKE %s
+                OR COALESCE(r.observacao, '') ILIKE %s
+            )"""
+        )
+        search_param = f"%{search}%"
+        params.extend([search_param, search_param, search_param, search_param])
+    params.extend([max(1, min(int(limit), 100)), max(0, int(offset))])
+
+    return _fetchall(
+        conn,
+        f"""
+        SELECT
+            r.id,
+            r.jogador_id,
+            j.nickname_atual AS nickname,
+            j.state,
+            j.ativo,
+            r.periodo_tipo,
+            r.data_referencia,
+            r.catches,
+            r.observacao,
+            r.contato_envio,
+            r.created_at,
+            r.updated_at,
+            r.status,
+            r.created_by,
+            u.nome AS usuario_nome,
+            u.email AS usuario_email,
+            r.curadoria_observacao,
+            r.reviewed_by,
+            r.reviewed_at
+        FROM registros_periodicos r
+        JOIN jogadores j ON j.id = r.jogador_id
+        LEFT JOIN usuarios u ON u.id = r.created_by
+        WHERE {" AND ".join(where_clauses)}
+        ORDER BY {order_sql} {direction_sql}, r.id {direction_sql}
+        LIMIT %s OFFSET %s
+        """,
+        tuple(params),
+    )
+
+
 def buscar_registro_por_id(conn, record_id: int) -> dict[str, Any] | None:
     return _fetchone(
         conn,
@@ -242,7 +343,11 @@ def buscar_registro_por_id(conn, record_id: int) -> dict[str, Any] | None:
             r.observacao,
             r.contato_envio,
             r.status,
-            r.created_at
+            r.created_at,
+            r.created_by,
+            r.curadoria_observacao,
+            r.reviewed_by,
+            r.reviewed_at
         FROM registros_periodicos r
         JOIN jogadores j ON j.id = r.jogador_id
         WHERE r.id = %s
@@ -297,6 +402,26 @@ def alterar_status_registro(conn, record_id: int, status: str) -> None:
             WHERE id = %s
             """,
             (status, record_id),
+        )
+
+
+def atualizar_curadoria_registro(
+    conn,
+    record_id: int,
+    reviewed_by: str | None = None,
+    curadoria_observacao: str | None = None,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE registros_periodicos
+            SET reviewed_by = %s,
+                reviewed_at = now(),
+                curadoria_observacao = %s,
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (reviewed_by, curadoria_observacao, record_id),
         )
 
 
@@ -392,3 +517,480 @@ def carregar_dados_dashboard(conn, periodo_tipo: str = "mensal") -> pd.DataFrame
     df["mostrar"] = "YES"
     df = df[["nickname", "date", "catches", "id_jogador", "state", "mostrar"]]
     return df
+
+
+def buscar_usuario_por_id(conn, user_id: str) -> dict[str, Any] | None:
+    return _fetchone(
+        conn,
+        """
+        SELECT
+            id,
+            email,
+            nome,
+            nickname,
+            pais,
+            estado,
+            cidade,
+            role,
+            is_premium,
+            premium_status,
+            premium_until,
+            input_monthly_limit,
+            created_at,
+            updated_at,
+            last_login_at,
+            last_seen_at,
+            email_verified
+        FROM usuarios
+        WHERE id = %s
+        """,
+        (user_id,),
+    )
+
+
+def upsert_usuario_profile(
+    conn,
+    user_id: str,
+    email: str,
+    nome: str | None = None,
+    nickname: str | None = None,
+    pais: str | None = None,
+    estado: str | None = None,
+    cidade: str | None = None,
+    email_verified: bool = False,
+) -> dict[str, Any]:
+    return _fetchone(
+        conn,
+        """
+        INSERT INTO usuarios (
+            id, email, nome, nickname, pais, estado, cidade, email_verified, last_login_at, last_seen_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+        ON CONFLICT (id) DO UPDATE SET
+            email = EXCLUDED.email,
+            nome = COALESCE(NULLIF(usuarios.nome, ''), EXCLUDED.nome),
+            nickname = COALESCE(NULLIF(usuarios.nickname, ''), EXCLUDED.nickname),
+            pais = COALESCE(NULLIF(usuarios.pais, ''), EXCLUDED.pais),
+            estado = COALESCE(NULLIF(usuarios.estado, ''), EXCLUDED.estado),
+            cidade = COALESCE(NULLIF(usuarios.cidade, ''), EXCLUDED.cidade),
+            email_verified = usuarios.email_verified OR EXCLUDED.email_verified,
+            last_login_at = now(),
+            last_seen_at = now(),
+            updated_at = now()
+        RETURNING
+            id,
+            email,
+            nome,
+            nickname,
+            pais,
+            estado,
+            cidade,
+            role,
+            is_premium,
+            premium_status,
+            premium_until,
+            input_monthly_limit,
+            created_at,
+            updated_at,
+            last_login_at,
+            last_seen_at,
+            email_verified
+        """,
+        (user_id, email, nome, nickname, pais, estado, cidade, email_verified),
+    )
+
+
+def atualizar_usuario_profile(
+    conn,
+    user_id: str,
+    nome: str | None = None,
+    nickname: str | None = None,
+    pais: str | None = None,
+    estado: str | None = None,
+    cidade: str | None = None,
+) -> dict[str, Any] | None:
+    return _fetchone(
+        conn,
+        """
+        UPDATE usuarios
+        SET nome = %s,
+            nickname = %s,
+            pais = %s,
+            estado = %s,
+            cidade = %s,
+            updated_at = now(),
+            last_seen_at = now()
+        WHERE id = %s
+        RETURNING
+            id,
+            email,
+            nome,
+            nickname,
+            pais,
+            estado,
+            cidade,
+            role,
+            is_premium,
+            premium_status,
+            premium_until,
+            input_monthly_limit,
+            created_at,
+            updated_at,
+            last_login_at,
+            last_seen_at,
+            email_verified
+        """,
+        (nome, nickname, pais, estado, cidade, user_id),
+    )
+
+
+def tocar_ultimo_acesso_usuario(conn, user_id: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE usuarios
+            SET last_seen_at = now(),
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (user_id,),
+        )
+
+
+def contar_inputs_usuario_mes(
+    conn,
+    user_id: str,
+    month_start: date,
+    next_month_start: date,
+) -> int:
+    row = _fetchone(
+        conn,
+        """
+        SELECT COUNT(*) AS total
+        FROM registros_periodicos
+        WHERE created_by = %s
+          AND created_at >= %s
+          AND created_at < %s
+          AND fonte <> 'admin'
+        """,
+        (user_id, month_start, next_month_start),
+    )
+    return int(row["total"]) if row else 0
+
+
+def listar_inputs_usuario(conn, user_id: str, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    return _fetchall(
+        conn,
+        """
+        SELECT
+            r.id,
+            j.nickname_atual AS nickname,
+            j.state,
+            r.periodo_tipo,
+            r.data_referencia,
+            r.catches,
+            r.status,
+            r.observacao,
+            r.curadoria_observacao,
+            r.created_at,
+            r.reviewed_at,
+            r.updated_at
+        FROM registros_periodicos r
+        JOIN jogadores j ON j.id = r.jogador_id
+        WHERE r.created_by = %s
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT %s OFFSET %s
+        """,
+        (user_id, limit, offset),
+    )
+
+
+def estatisticas_inputs_usuario(conn, user_id: str) -> dict[str, Any]:
+    return _fetchone(
+        conn,
+        """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE status = 'pendente') AS pendentes,
+            COUNT(*) FILTER (WHERE status = 'validado') AS aprovados,
+            COUNT(*) FILTER (WHERE status = 'rejeitado') AS rejeitados,
+            COALESCE(MAX(created_at), NULL) AS ultimo_envio
+        FROM registros_periodicos
+        WHERE created_by = %s
+        """,
+        (user_id,),
+    ) or {
+        "total": 0,
+        "pendentes": 0,
+        "aprovados": 0,
+        "rejeitados": 0,
+        "ultimo_envio": None,
+    }
+
+
+def contar_eventos_seguranca(
+    conn,
+    event_type: str,
+    since_timestamp,
+    user_id: str | None = None,
+    subject_hash: str | None = None,
+) -> int:
+    user_clause = "AND user_id = %s" if user_id else ""
+    subject_clause = "AND subject_hash = %s" if subject_hash else ""
+    params: list[Any] = [event_type, since_timestamp]
+    if user_id:
+        params.append(user_id)
+    if subject_hash:
+        params.append(subject_hash)
+
+    row = _fetchone(
+        conn,
+        f"""
+        SELECT COUNT(*) AS total
+        FROM security_events
+        WHERE event_type = %s
+          AND created_at >= %s
+          {user_clause}
+          {subject_clause}
+        """,
+        tuple(params),
+    )
+    return int(row["total"]) if row else 0
+
+
+def registrar_evento_seguranca(
+    conn,
+    event_type: str,
+    user_id: str | None = None,
+    subject_hash: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO security_events (event_type, user_id, subject_hash, metadata)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                event_type,
+                user_id,
+                subject_hash,
+                json.dumps(metadata or {}, ensure_ascii=False),
+            ),
+        )
+
+
+def criar_pagamento(
+    conn,
+    user_id: str,
+    provider: str,
+    amount_cents: int,
+    currency: str,
+    external_reference: str,
+    checkout_url: str | None = None,
+    plan_code: str = "premium_monthly",
+    status: str = "checkout_pending",
+) -> dict[str, Any]:
+    return _fetchone(
+        conn,
+        """
+        INSERT INTO pagamentos (
+            user_id,
+            provider,
+            plan_code,
+            status,
+            amount_cents,
+            currency,
+            external_reference,
+            checkout_url
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING
+            id,
+            user_id,
+            provider,
+            plan_code,
+            status,
+            amount_cents,
+            currency,
+            external_reference,
+            checkout_url,
+            created_at,
+            updated_at
+        """,
+        (user_id, provider, plan_code, status, amount_cents, currency, external_reference, checkout_url),
+    )
+
+
+def buscar_pagamento_por_referencia(conn, external_reference: str) -> dict[str, Any] | None:
+    return _fetchone(
+        conn,
+        """
+        SELECT
+            id,
+            user_id,
+            provider,
+            plan_code,
+            status,
+            amount_cents,
+            currency,
+            external_reference,
+            provider_payment_id,
+            checkout_url,
+            paid_at,
+            created_at,
+            updated_at
+        FROM pagamentos
+        WHERE external_reference = %s
+        LIMIT 1
+        """,
+        (external_reference,),
+    )
+
+
+def listar_pagamentos_usuario(conn, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    return _fetchall(
+        conn,
+        """
+        SELECT
+            id,
+            provider,
+            plan_code,
+            status,
+            amount_cents,
+            currency,
+            external_reference,
+            provider_payment_id,
+            checkout_url,
+            paid_at,
+            created_at,
+            updated_at
+        FROM pagamentos
+        WHERE user_id = %s
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (user_id, limit),
+    )
+
+
+def atualizar_pagamento_status(
+    conn,
+    payment_id: int,
+    status: str,
+    provider_payment_id: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    return _fetchone(
+        conn,
+        """
+        UPDATE pagamentos
+        SET status = %s,
+            provider_payment_id = COALESCE(%s, provider_payment_id),
+            raw_payload = COALESCE(%s::jsonb, raw_payload),
+            paid_at = CASE WHEN %s = 'paid' THEN COALESCE(paid_at, now()) ELSE paid_at END,
+            updated_at = now()
+        WHERE id = %s
+        RETURNING
+            id,
+            user_id,
+            provider,
+            plan_code,
+            status,
+            amount_cents,
+            currency,
+            external_reference,
+            provider_payment_id,
+            checkout_url,
+            paid_at,
+            created_at,
+            updated_at
+        """,
+        (
+            status,
+            provider_payment_id,
+            json.dumps(raw_payload, ensure_ascii=False) if raw_payload is not None else None,
+            status,
+            payment_id,
+        ),
+    )
+
+
+def ativar_premium_usuario(
+    conn,
+    user_id: str,
+    provider: str,
+    premium_until=None,
+) -> dict[str, Any] | None:
+    return _fetchone(
+        conn,
+        """
+        UPDATE usuarios
+        SET is_premium = TRUE,
+            premium_status = 'premium',
+            premium_provider = %s,
+            premium_until = %s,
+            updated_at = now()
+        WHERE id = %s
+        RETURNING
+            id,
+            email,
+            nome,
+            nickname,
+            pais,
+            estado,
+            cidade,
+            role,
+            is_premium,
+            premium_status,
+            premium_until,
+            input_monthly_limit,
+            created_at,
+            updated_at,
+            last_login_at,
+            last_seen_at,
+            email_verified
+        """,
+        (provider, premium_until, user_id),
+    )
+
+
+def registrar_webhook_pagamento(
+    conn,
+    provider: str,
+    event_id: str | None,
+    signature_valid: bool,
+    status: str,
+    payload: dict[str, Any],
+    user_id: str | None = None,
+    payment_id: int | None = None,
+    error: str | None = None,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO payment_webhook_logs (
+                provider,
+                event_id,
+                signature_valid,
+                status,
+                payload,
+                user_id,
+                payment_id,
+                error,
+                processed_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (provider, event_id) WHERE event_id IS NOT NULL DO NOTHING
+            """,
+            (
+                provider,
+                event_id,
+                signature_valid,
+                status,
+                json.dumps(payload, ensure_ascii=False),
+                user_id,
+                payment_id,
+                error,
+            ),
+        )

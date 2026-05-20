@@ -6,11 +6,47 @@ CREATE TABLE IF NOT EXISTS usuarios (
     id UUID PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     nome TEXT,
+    nickname TEXT,
+    pais TEXT,
+    estado TEXT,
+    cidade TEXT,
     role TEXT NOT NULL DEFAULT 'jogador' CHECK (role IN ('admin', 'moderador', 'jogador')),
+    is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+    premium_status TEXT NOT NULL DEFAULT 'free' CHECK (premium_status IN ('free', 'premium', 'past_due', 'cancelled')),
+    premium_provider TEXT,
+    premium_until TIMESTAMPTZ,
+    input_monthly_limit INT NOT NULL DEFAULT 5 CHECK (input_monthly_limit >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_login_at TIMESTAMPTZ
+    last_login_at TIMESTAMPTZ,
+    last_seen_at TIMESTAMPTZ,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    session_revoked_at TIMESTAMPTZ,
+    terms_accepted_at TIMESTAMPTZ
 );
+
+CREATE OR REPLACE VIEW profiles
+WITH (security_invoker = true) AS
+SELECT
+    id,
+    email,
+    nome,
+    nickname,
+    pais,
+    estado,
+    cidade,
+    role,
+    is_premium,
+    premium_status,
+    premium_provider,
+    premium_until,
+    input_monthly_limit,
+    created_at,
+    updated_at,
+    last_login_at,
+    last_seen_at,
+    email_verified
+FROM usuarios;
 
 CREATE TABLE IF NOT EXISTS jogadores (
     id BIGSERIAL PRIMARY KEY,
@@ -51,6 +87,14 @@ CREATE TABLE IF NOT EXISTS registros_periodicos (
     contato_envio TEXT,
     status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'validado', 'rejeitado')),
     created_by UUID REFERENCES usuarios(id),
+    submission_type TEXT NOT NULL DEFAULT 'manual' CHECK (submission_type IN ('manual', 'site', 'api', 'import', 'admin')),
+    curadoria_observacao TEXT,
+    reviewed_by UUID REFERENCES usuarios(id),
+    reviewed_at TIMESTAMPTZ,
+    auto_score NUMERIC(6, 3),
+    validation_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ip_hash TEXT,
+    user_agent_hash TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -61,6 +105,7 @@ ALTER TABLE registros_periodicos
 CREATE INDEX IF NOT EXISTS idx_registros_jogador_data ON registros_periodicos (jogador_id, data_referencia);
 CREATE INDEX IF NOT EXISTS idx_registros_periodo_data ON registros_periodicos (periodo_tipo, data_referencia);
 CREATE INDEX IF NOT EXISTS idx_registros_status ON registros_periodicos (status);
+CREATE INDEX IF NOT EXISTS idx_registros_created_by_created_at ON registros_periodicos (created_by, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jogadores_nickname_lower ON jogadores (lower(nickname_atual));
 CREATE INDEX IF NOT EXISTS idx_jogador_nicknames_nickname_lower ON jogador_nicknames (lower(nickname));
 CREATE INDEX IF NOT EXISTS idx_registros_dashboard_validado
@@ -124,3 +169,58 @@ CREATE TABLE IF NOT EXISTS auditoria_registros (
     usuario_id UUID REFERENCES usuarios(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS security_events (
+    id BIGSERIAL PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    user_id UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+    subject_hash TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_events_user_type_created
+    ON security_events (user_id, event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_security_events_subject_type_created
+    ON security_events (subject_hash, event_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS pagamentos (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL CHECK (provider IN ('manual', 'cacto', 'pagseguro', 'stripe')),
+    plan_code TEXT NOT NULL DEFAULT 'premium_monthly',
+    status TEXT NOT NULL DEFAULT 'checkout_pending'
+        CHECK (status IN ('checkout_pending', 'pending', 'paid', 'failed', 'cancelled', 'refunded')),
+    amount_cents INT NOT NULL CHECK (amount_cents >= 0),
+    currency TEXT NOT NULL DEFAULT 'BRL',
+    external_reference TEXT NOT NULL UNIQUE,
+    provider_payment_id TEXT,
+    checkout_url TEXT,
+    raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    retry_count INT NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+    last_error TEXT,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagamentos_user_created ON pagamentos (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_provider_payment ON pagamentos (provider, provider_payment_id);
+
+CREATE TABLE IF NOT EXISTS payment_webhook_logs (
+    id BIGSERIAL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    event_id TEXT,
+    signature_valid BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'received',
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    user_id UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+    payment_id BIGINT REFERENCES pagamentos(id) ON DELETE SET NULL,
+    error TEXT,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_webhook_provider_event
+    ON payment_webhook_logs (provider, event_id)
+    WHERE event_id IS NOT NULL;

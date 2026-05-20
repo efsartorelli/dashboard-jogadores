@@ -1,14 +1,15 @@
 from html import escape
 from datetime import date
-import hmac
+import time
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.config import ADMIN_PASSWORD, DATA_SOURCE, ENABLE_ADMIN
-from src.database.connection import has_database_config
+from src.auth import AuthError, AuthSession, get_auth_client
+from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE
+from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
 from src.metrics.formatting import format_compact, format_int, initials
@@ -16,9 +17,26 @@ from src.metrics.rankings import build_general_ranking as compute_general_rankin
 from src.metrics.rankings import get_best_catches as compute_best_catches
 from src.metrics.states import build_state_stats as compute_state_stats
 from src.services.data_source import get_data_source_fingerprint, load_dashboard_data
-from src.services.admin_review import approve_record, list_pending_records, reject_record, update_pending_record
+from src.services.admin_review import (
+    approve_record,
+    list_curation_records,
+    list_pending_records,
+    reject_record,
+    update_pending_record,
+)
+from src.services.payments import create_upgrade_checkout
 from src.services.submissions import submit_player_record
+from src.services.users import (
+    ensure_profile,
+    get_profile_overview,
+    get_user_entitlement,
+    update_user_profile,
+    user_can_moderate,
+    user_is_admin,
+    profile_has_location,
+)
 from src.validation.submissions import BRAZILIAN_STATES
+from src.validation.profiles import COUNTRIES, validate_profile_fields
 
 
 st.set_page_config(
@@ -62,6 +80,19 @@ def build_distribution(base):
     return compute_distribution(base)
 
 
+@st.cache_data(show_spinner=False, ttl=30)
+def get_curation_queue(admin_user_id, status, search, order_by, order_direction, page, page_size):
+    return list_curation_records(
+        admin_user_id=admin_user_id,
+        status=status,
+        search=search,
+        order_by=order_by,
+        order_direction=order_direction,
+        page=page,
+        page_size=page_size,
+    )
+
+
 def ui_html(markup):
     st.html(markup)
 
@@ -75,6 +106,10 @@ def clear_dashboard_caches():
     build_distribution.clear()
 
 
+def clear_curation_caches():
+    get_curation_queue.clear()
+
+
 def render_feedback(result, success_message, info_message=None):
     if not result:
         return
@@ -86,36 +121,304 @@ def render_feedback(result, success_message, info_message=None):
     st.error("; ".join(result.get("errors", ["Não foi possível concluir a ação."])))
 
 
-def render_public_submission_page():
+AUTH_SESSION_STATE_KEY = "supabase_auth_session"
+AUTH_VALIDATED_AT_STATE_KEY = "supabase_auth_validated_at"
+
+
+def get_session_from_state() -> AuthSession | None:
+    return AuthSession.from_dict(st.session_state.get(AUTH_SESSION_STATE_KEY))
+
+
+def store_auth_session(session: AuthSession) -> None:
+    st.session_state[AUTH_SESSION_STATE_KEY] = session.to_dict()
+    st.session_state[AUTH_VALIDATED_AT_STATE_KEY] = int(time.time())
+
+
+def clear_auth_session() -> None:
+    for key in [
+        AUTH_SESSION_STATE_KEY,
+        AUTH_VALIDATED_AT_STATE_KEY,
+        "current_profile",
+        "profile_overview",
+        "auth_feedback",
+        "auth_attempts",
+    ]:
+        st.session_state.pop(key, None)
+
+
+def logout_current_user() -> None:
+    session = get_session_from_state()
+    if session:
+        try:
+            get_auth_client().sign_out(session.access_token)
+        except AuthError:
+            pass
+    clear_auth_session()
+    st.rerun()
+
+
+def auth_attempt_allowed() -> bool:
+    now = int(time.time())
+    attempts = [stamp for stamp in st.session_state.get("auth_attempts", []) if now - stamp < 600]
+    st.session_state.auth_attempts = attempts
+    return len(attempts) < 8
+
+
+def record_auth_attempt() -> None:
+    attempts = list(st.session_state.get("auth_attempts", []))
+    attempts.append(int(time.time()))
+    st.session_state.auth_attempts = attempts[-12:]
+
+
+def render_auth_page():
+    ui_html("""
+        <section class="landing-hero section-anchor">
+            <div class="landing-grid">
+                <div>
+                    <div class="eyebrow">Ranking BR · comunidade Pokemon GO</div>
+                    <h1 class="hero-title">Transparencia, historico e reconhecimento para jogadores brasileiros</h1>
+                    <p class="hero-copy">
+                        Uma plataforma criada e mantida por Enzo para organizar dados da comunidade,
+                        preservar a evolucao dos jogadores e dar visibilidade a quem constrói o cenário
+                        competitivo brasileiro.
+                    </p>
+                    <div class="hero-actions">
+                        <a class="rb-button primary" href="#auth">Entrar ou registrar</a>
+                        <a class="rb-button" href="#sobre-plataforma">Conhecer o projeto</a>
+                    </div>
+                </div>
+                <div class="hero-stat-grid">
+                    <article class="stat-card">
+                        <div class="stat-label">Dados organizados</div>
+                        <div class="stat-value">Curadoria</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-label">Contas free</div>
+                        <div class="stat-value">5/mês</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-label">Evolucao futura</div>
+                        <div class="stat-value">Premium</div>
+                    </article>
+                </div>
+            </div>
+        </section>
+        <section id="sobre-plataforma" class="landing-section section-anchor">
+            <div class="section-head">
+                <div>
+                    <div class="section-kicker">Projeto</div>
+                    <h2 class="section-title">Um histórico confiável para a comunidade</h2>
+                    <p class="section-copy">
+                        O Ranking BR centraliza registros, compara evolucao, organiza estados e cria
+                        uma base revisada para que os dados tenham contexto, rastreabilidade e consistência.
+                    </p>
+                </div>
+            </div>
+            <div class="premium-grid">
+                <article class="premium-card">
+                    <div class="premium-card-label">Comunidade</div>
+                    <div class="premium-card-title">Trabalho contínuo</div>
+                    <div class="premium-card-copy">Enzo estruturou o painel para transformar registros soltos em uma base consultável e historica.</div>
+                </article>
+                <article class="premium-card">
+                    <div class="premium-card-label">Curadoria</div>
+                    <div class="premium-card-title">Dados revisados</div>
+                    <div class="premium-card-copy">Inputs enviados por usuarios passam por revisão antes de entrar no ranking global.</div>
+                </article>
+                <article class="premium-card">
+                    <div class="premium-card-label">SaaS</div>
+                    <div class="premium-card-title">Preparado para crescer</div>
+                    <div class="premium-card-copy">Contas, limites mensais, perfil, premium e permissões foram desenhados para operação real.</div>
+                </article>
+            </div>
+        </section>
+        <section class="landing-section section-anchor">
+            <div class="section-head">
+                <div>
+                    <div class="section-kicker">Participacao</div>
+                    <h2 class="section-title">Entre para enviar seus dados</h2>
+                    <p class="section-copy">
+                        Usuarios logados podem enviar registros proprios, acompanhar status de curadoria
+                        e editar nickname e localidade no perfil. Contas free possuem limite mensal; o
+                        plano premium recebera recursos extras futuramente.
+                    </p>
+                </div>
+            </div>
+        </section>
+        <div id="auth" class="section-anchor"></div>
+    """)
+
+    client = get_auth_client()
+    if not client.is_configured:
+        st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY.")
+        return
+
+    feedback = st.session_state.pop("auth_feedback", None)
+    if feedback:
+        level, message = feedback
+        getattr(st, level)(message)
+
+    login_tab, signup_tab, recover_tab = st.tabs(["Entrar", "Criar conta", "Recuperar senha"])
+
+    with login_tab:
+        with st.container(key="auth_login_shell"):
+            with st.form("login_form"):
+                email = st.text_input("Email", key="login_email").strip().lower()
+                password = st.text_input("Senha", type="password", key="login_password")
+                submitted = st.form_submit_button("Entrar", type="primary")
+
+            if submitted:
+                if not auth_attempt_allowed():
+                    st.error("Muitas tentativas de login. Aguarde alguns minutos.")
+                    return
+                record_auth_attempt()
+                try:
+                    session = client.sign_in(email, password)
+                    store_auth_session(session)
+                    st.rerun()
+                except AuthError as exc:
+                    st.error(str(exc))
+
+    with signup_tab:
+        with st.container(key="auth_signup_shell"):
+            with st.form("signup_form"):
+                nickname = st.text_input("Nickname", max_chars=40, key="signup_nickname")
+                email = st.text_input("Email", key="signup_email").strip().lower()
+                pais = st.selectbox("País", COUNTRIES, index=0, key="signup_country")
+                estado = st.selectbox("Estado", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"), key="signup_state")
+                cidade = st.text_input("Cidade", max_chars=80, key="signup_city")
+                password = st.text_input("Senha", type="password", key="signup_password")
+                confirm = st.text_input("Confirmar senha", type="password", key="signup_confirm")
+                accepted = st.checkbox("Li e aceito os termos de uso da plataforma.", key="signup_terms")
+                submitted = st.form_submit_button("Criar conta", type="primary")
+
+            if submitted:
+                normalized_profile, profile_errors = validate_profile_fields(nickname, pais, estado, cidade)
+                if profile_errors:
+                    st.error("; ".join(profile_errors))
+                    return
+                if len(password) < 8:
+                    st.error("Use uma senha com pelo menos 8 caracteres.")
+                    return
+                if password != confirm:
+                    st.error("As senhas nao conferem.")
+                    return
+                if not accepted:
+                    st.error("Aceite os termos para criar a conta.")
+                    return
+                try:
+                    session = client.sign_up(
+                        email,
+                        password,
+                        name=normalized_profile["nickname"],
+                        nickname=normalized_profile["nickname"],
+                        pais=normalized_profile["pais"],
+                        estado=normalized_profile["estado"],
+                        cidade=normalized_profile["cidade"],
+                    )
+                    if session:
+                        store_auth_session(session)
+                        st.rerun()
+                    st.success("Conta criada. Verifique seu email para validar o acesso.")
+                except AuthError as exc:
+                    st.error(str(exc))
+
+    with recover_tab:
+        with st.container(key="auth_recover_shell"):
+            with st.form("recover_form"):
+                email = st.text_input("Email da conta", key="recover_email").strip().lower()
+                submitted = st.form_submit_button("Enviar recuperacao", type="primary")
+            if submitted:
+                try:
+                    client.recover_password(email)
+                    st.success("Se o email existir, enviaremos o link de recuperacao.")
+                except AuthError as exc:
+                    st.error(str(exc))
+
+
+def require_authenticated_user() -> tuple[AuthSession, dict]:
+    client = get_auth_client()
+    session = get_session_from_state()
+    if not session:
+        render_auth_page()
+        st.stop()
+
+    try:
+        if session.should_refresh:
+            session = client.refresh(session.refresh_token)
+            store_auth_session(session)
+
+        last_validated = int(st.session_state.get(AUTH_VALIDATED_AT_STATE_KEY, 0) or 0)
+        if int(time.time()) - last_validated >= AUTH_SESSION_VALIDATE_INTERVAL_SECONDS:
+            user = client.get_user(session.access_token)
+            session = session.with_user(user)
+            store_auth_session(session)
+
+        profile = ensure_profile(session.user)
+        st.session_state.current_profile = profile
+        return session, profile
+    except (AuthError, DatabaseUnavailable, Exception) as exc:
+        clear_auth_session()
+        st.error(f"Sessao encerrada ou configuracao incompleta: {exc}")
+        render_auth_page()
+        st.stop()
+
+
+def render_public_submission_page(profile):
     ui_html("""
         <section class="page-hero submission-hero">
-            <div class="eyebrow">Envio público</div>
+            <div class="eyebrow">Curadoria manual</div>
             <h1 class="page-title">Enviar dados</h1>
             <p class="page-copy">
-                Registros enviados pelo público entram como pendentes e só aparecem no ranking
-                depois da revisão administrativa.
+                Registros enviados entram como pendentes e so aparecem no ranking
+                depois da revisao administrativa.
             </p>
         </section>
     """)
 
     if DATA_SOURCE != "database":
-        st.warning("Envio público indisponível no modo Excel. Ative DATA_SOURCE=database para usar este formulário.")
+        st.warning("Envio indisponivel no modo Excel. Ative DATA_SOURCE=database para usar este formulario.")
         return
     if not has_database_config():
-        st.warning("Envio público indisponível: banco de dados não configurado.")
+        st.warning("Envio indisponivel: banco de dados nao configurado.")
         return
 
-    render_feedback(
-        st.session_state.pop("public_submission_result", None),
-        "Registro enviado para revisão.",
-        "O envio ficou como pendente. Depois da aprovação do admin, ele entra no dashboard.",
+    try:
+        entitlement = get_user_entitlement(profile)
+    except Exception:
+        st.error("Nao foi possivel carregar seu limite mensal. Verifique a migration SaaS no Supabase.")
+        return
+
+    st.caption(
+        f"Inputs restantes neste mes: {entitlement.remaining_this_month} de {entitlement.monthly_limit}."
     )
+
+    render_feedback(
+        st.session_state.pop("user_submission_result", None),
+        "Registro enviado para revisao.",
+        "O envio ficou como pendente. Depois da aprovacao, ele entra no dashboard.",
+    )
+
+    if not entitlement.can_submit:
+        st.warning("Voce atingiu o limite mensal do plano atual. A pagina Premium mostra as opcoes de upgrade.")
+        return
+
+    has_location = profile_has_location(profile)
+    profile_nickname = str(profile.get("nickname") or "").strip()
+    if not has_location:
+        st.info("Complete país, estado e cidade neste primeiro envio. Depois disso, a localidade fica salva no Perfil.")
+    if not profile_nickname:
+        st.info("Complete seu nickname para vincular os envios ao seu perfil.")
 
     with st.container(key="public_submission_shell"):
         with st.form("public_submission_form", clear_on_submit=True):
             left, right = st.columns([0.58, 0.42], vertical_alignment="top")
             with left:
-                nickname = st.text_input("Nickname", max_chars=80, placeholder="Seu nickname no jogo")
+                if profile_nickname:
+                    st.text_input("Nickname", value=profile_nickname, disabled=True)
+                    nickname = profile_nickname
+                else:
+                    nickname = st.text_input("Nickname", max_chars=40, placeholder="Seu nickname no jogo")
                 data_referencia = st.date_input("Data do registro", value=date.today(), max_value=date.today())
                 catches = st.number_input(
                     "Total de capturas",
@@ -125,15 +428,52 @@ def render_public_submission_page():
                     format="%d",
                 )
             with right:
-                state = st.selectbox("Estado (UF)", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"))
-                contato = st.text_input("Contato opcional", max_chars=120, placeholder="Email, WhatsApp ou @")
+                if has_location:
+                    pais = str(profile.get("pais") or "")
+                    state = str(profile.get("estado") or "")
+                    cidade = str(profile.get("cidade") or "")
+                    st.text_input("Localidade", value=f"{cidade} · {state} · {pais}", disabled=True)
+                else:
+                    pais = st.selectbox("País", COUNTRIES, index=0, key="submission_country")
+                    state = st.selectbox("Estado (UF)", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"))
+                    cidade = st.text_input("Cidade", max_chars=80, key="submission_city")
+                contato = st.text_input(
+                    "Contato opcional",
+                    max_chars=120,
+                    value=str(profile.get("email") or ""),
+                    placeholder="Email, WhatsApp ou @",
+                )
                 observacao = st.text_area("Observação opcional", max_chars=500, height=126)
-            submitted = st.form_submit_button("Enviar para revisão", type="primary")
+            submitted = st.form_submit_button("Enviar para revisao", type="primary")
 
     if submitted:
+        normalized_profile, profile_errors = validate_profile_fields(nickname, pais, state, cidade)
+        if profile_errors:
+            st.session_state.user_submission_result = {"success": False, "errors": profile_errors}
+            st.rerun()
+
+        if not has_location or not profile_nickname:
+            try:
+                updated_profile = update_user_profile(
+                    profile.get("id"),
+                    profile.get("nome") or normalized_profile["nickname"],
+                    normalized_profile["nickname"],
+                    normalized_profile["pais"],
+                    normalized_profile["estado"],
+                    normalized_profile["cidade"],
+                )
+                if updated_profile:
+                    st.session_state.current_profile = updated_profile
+                    profile = updated_profile
+            except Exception as exc:
+                st.session_state.user_submission_result = {"success": False, "errors": [str(exc)]}
+                st.rerun()
+
         result = submit_player_record({
-            "nickname": nickname,
-            "state": state,
+            "nickname": normalized_profile["nickname"],
+            "state": normalized_profile["estado"],
+            "pais": normalized_profile["pais"],
+            "cidade": normalized_profile["cidade"],
             "data_referencia": data_referencia,
             "catches": int(catches),
             "periodo_tipo": "mensal",
@@ -141,13 +481,15 @@ def render_public_submission_page():
             "fonte": "site",
             "observacao": observacao,
             "contato_envio": contato,
-        })
-        st.session_state.public_submission_result = result
+            "created_by": profile.get("id"),
+        }, require_authenticated=True, enforce_monthly_limit=True, enforce_rate_limit=True)
+        st.session_state.user_submission_result = result
         st.rerun()
 
 
-def render_admin_page():
-    if not ENABLE_ADMIN or not ADMIN_PASSWORD:
+def render_admin_page(profile):
+    if not user_can_moderate(profile):
+        st.error("Acesso restrito a moderadores.")
         return
 
     ui_html("""
@@ -179,27 +521,11 @@ def render_admin_page():
         st.error("; ".join(last_result.get("errors", ["Erro ao salvar registro."])))
 
     if not has_database_config():
-        st.warning("Admin indisponível: banco não configurado.")
-        return
-
-    if not st.session_state.get("admin_authenticated"):
-        with st.container(key="admin_login_shell"):
-            password = st.text_input("Senha admin", type="password", key="admin_password_input")
-            if st.button("Entrar", type="primary", key="admin_login_button"):
-                if hmac.compare_digest(password or "", ADMIN_PASSWORD):
-                    st.session_state.admin_authenticated = True
-                    st.rerun()
-                st.error("Senha inválida.")
+        st.warning("Admin indisponivel: banco nao configurado.")
         return
 
     with st.container(key="admin_session_bar"):
-        left, right = st.columns([0.78, 0.22], vertical_alignment="center")
-        with left:
-            st.caption("Sessão administrativa ativa.")
-        with right:
-            if st.button("Sair", key="admin_logout_button"):
-                st.session_state.admin_authenticated = False
-                st.rerun()
+        st.caption(f"Curadoria ativa para {profile.get('email', 'moderador')}.")
 
     insert_tab, pending_tab = st.tabs(["Novo registro", "Pendentes"])
 
@@ -234,6 +560,7 @@ def render_admin_page():
                     "status": status,
                     "fonte": "admin",
                     "observacao": observacao,
+                    "created_by": profile.get("id"),
                 }, allow_validated=True)
                 if result.get("success"):
                     clear_dashboard_caches()
@@ -334,15 +661,16 @@ def render_admin_page():
                         "observacao": edited_note,
                         "admin_note": admin_note,
                     },
+                    admin_user_id=profile.get("id"),
                 )
                 result = update_result
                 if update_result.get("success") and action == "Aprovar":
-                    result = approve_record(record_id, admin_note=admin_note)
+                    result = approve_record(record_id, admin_note=admin_note, admin_user_id=profile.get("id"))
                 elif update_result.get("success") and action in {"Rejeitar", "Excluir logicamente"}:
                     note = admin_note
                     if action == "Excluir logicamente":
                         note = f"{admin_note}\nExclusão lógica solicitada pelo admin.".strip()
-                    result = reject_record(record_id, admin_note=note)
+                    result = reject_record(record_id, admin_note=note, admin_user_id=profile.get("id"))
 
                 if result.get("success"):
                     clear_dashboard_caches()
@@ -1521,8 +1849,88 @@ def inject_css(dark_mode):
         line-height: 1.62;
     }}
 
+    .landing-hero,
+    .landing-section {{
+        margin-bottom: 1rem;
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-lg);
+        background: linear-gradient(150deg, var(--rb-card), var(--rb-card-3));
+        box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+    }}
+
+    .landing-hero {{
+        padding: clamp(1.3rem, 3vw, 2.6rem);
+        min-height: 360px;
+        display: grid;
+        align-items: center;
+    }}
+
+    .landing-section {{
+        padding: clamp(1rem, 2.6vw, 1.55rem);
+    }}
+
+    .landing-grid {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 0.74fr);
+        gap: clamp(1.2rem, 4vw, 3.5rem);
+        align-items: center;
+    }}
+
+    .profile-metric-grid,
+    .premium-grid {{
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin: 1rem 0;
+    }}
+
+    .premium-grid {{
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
+
+    .profile-metric,
+    .premium-card {{
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-md);
+        padding: 1rem;
+        background: linear-gradient(150deg, rgba(19,27,36,0.74), rgba(9,14,20,0.48));
+        min-height: 112px;
+    }}
+
+    .profile-metric-label,
+    .premium-card-label {{
+        color: var(--rb-muted);
+        font-size: 0.78rem;
+        font-weight: 820;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }}
+
+    .profile-metric-value,
+    .premium-card-title {{
+        margin-top: 0.45rem;
+        color: var(--rb-text);
+        font-size: 1.45rem;
+        font-weight: 930;
+        line-height: 1.08;
+    }}
+
+    .premium-card-copy {{
+        margin-top: 0.6rem;
+        color: var(--rb-muted);
+        line-height: 1.52;
+    }}
+
+    .st-key-auth_login_shell,
+    .st-key-auth_signup_shell,
+    .st-key-auth_recover_shell,
     .st-key-public_submission_shell,
-    .st-key-admin_login_shell,
+    .st-key-profile_edit_shell,
+    .st-key-session_shell,
+    .st-key-premium_cta_shell,
+    .st-key-curation_filter_shell,
+    .st-key-curation_queue_shell,
+    .st-key-curation_review_shell,
     .st-key-admin_session_bar,
     .st-key-admin_insert_shell,
     .st-key-admin_review_shell {{
@@ -1638,6 +2046,10 @@ def inject_css(dark_mode):
             grid-template-columns: 1fr;
         }}
 
+        .landing-grid {{
+            grid-template-columns: 1fr;
+        }}
+
         .hero-stat-grid {{
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }}
@@ -1710,9 +2122,16 @@ def inject_css(dark_mode):
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }}
 
+        .profile-metric-grid,
+        .premium-grid {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }}
+
         .st-key-filters_panel [data-testid="stHorizontalBlock"],
         .st-key-chart_panel [data-testid="stHorizontalBlock"],
-        .st-key-states_section [data-testid="stHorizontalBlock"] {{
+        .st-key-states_section [data-testid="stHorizontalBlock"],
+        .st-key-curation_filter_shell [data-testid="stHorizontalBlock"],
+        .st-key-curation_review_shell [data-testid="stHorizontalBlock"] {{
             flex-wrap: wrap;
         }}
 
@@ -1755,6 +2174,11 @@ def inject_css(dark_mode):
         .block-container {{
             padding-left: 0.65rem;
             padding-right: 0.65rem;
+        }}
+
+        .profile-metric-grid,
+        .premium-grid {{
+            grid-template-columns: 1fr;
         }}
 
         .hero,
@@ -2244,37 +2668,445 @@ def render_footer():
     """)
 
 
+def format_datetime_value(value):
+    if value in (None, ""):
+        return "-"
+    try:
+        return pd.to_datetime(value).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return str(value)
+
+
+def curation_status_label(status: str) -> str:
+    return {
+        "pendente": "pending",
+        "validado": "approved",
+        "rejeitado": "rejected",
+    }.get(str(status or "").lower(), str(status or "-"))
+
+
+def render_curation_page(profile):
+    if not user_is_admin(profile):
+        st.error("Acesso restrito a administradores.")
+        return
+
+    ui_html("""
+        <section class="page-hero admin-hero">
+            <div class="eyebrow">Admin</div>
+            <h1 class="page-title">Curadoria</h1>
+            <p class="page-copy">
+                Revise registros pendentes, aprove entradas válidas e mantenha o histórico de auditoria.
+            </p>
+        </section>
+    """)
+
+    render_feedback(
+        st.session_state.pop("curation_last_result", None),
+        "Curadoria atualizada.",
+    )
+
+    status_options = {
+        "pending": "pendente",
+        "approved": "validado",
+        "rejected": "rejeitado",
+    }
+    order_options = {
+        "Mais antigos": ("created_at", "asc"),
+        "Mais recentes": ("created_at", "desc"),
+        "Maior valor": ("catches", "desc"),
+        "Menor valor": ("catches", "asc"),
+        "Nickname": ("nickname", "asc"),
+        "Email": ("email", "asc"),
+    }
+
+    with st.container(key="curation_filter_shell"):
+        filters_left, filters_mid, filters_right = st.columns([0.44, 0.24, 0.32], vertical_alignment="bottom")
+        with filters_left:
+            search = st.text_input("Busca", placeholder="Nickname, email, nome ou observação", key="curation_search")
+        with filters_mid:
+            selected_status_label = st.selectbox("Status", list(status_options.keys()), index=0, key="curation_status")
+        with filters_right:
+            selected_order_label = st.selectbox("Ordenar por", list(order_options.keys()), index=0, key="curation_order")
+
+    page_size = 10
+    page_key = "curation_page"
+    st.session_state.setdefault(page_key, 0)
+    status = status_options[selected_status_label]
+    order_by, order_direction = order_options[selected_order_label]
+
+    result = get_curation_queue(
+        str(profile.get("id")),
+        status,
+        search.strip(),
+        order_by,
+        order_direction,
+        int(st.session_state[page_key]),
+        page_size,
+    )
+    if not result.get("success"):
+        st.error("; ".join(result.get("errors", ["Nao foi possivel carregar a curadoria."])))
+        return
+
+    total = int(result.get("total", 0))
+    records = result.get("records", [])
+    page_count = max(1, int(np.ceil(total / page_size)))
+    if st.session_state[page_key] >= page_count:
+        st.session_state[page_key] = page_count - 1
+        st.rerun()
+
+    pending_total = total if status == "pendente" and not search.strip() else None
+    if pending_total is None:
+        pending_total = int(get_curation_queue(str(profile.get("id")), "pendente", "", "created_at", "asc", 0, 1).get("total", 0))
+
+    ui_html(f"""
+        <div class="profile-metric-grid">
+            <article class="profile-metric">
+                <div class="profile-metric-label">Pendentes</div>
+                <div class="profile-metric-value">{format_int(pending_total)}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Resultado atual</div>
+                <div class="profile-metric-value">{format_int(total)}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Página</div>
+                <div class="profile-metric-value">{st.session_state[page_key] + 1}/{page_count}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Status</div>
+                <div class="profile-metric-value">{escape(selected_status_label)}</div>
+            </article>
+        </div>
+    """)
+
+    if not records:
+        ui_html('<div class="empty-state">Nenhum registro encontrado para os filtros atuais.</div>')
+        return
+
+    queue_df = pd.DataFrame(records)
+    queue_view = pd.DataFrame({
+        "ID": queue_df["id"],
+        "Usuario": queue_df["usuario_nome"].fillna("-"),
+        "Email": queue_df["usuario_email"].fillna("-"),
+        "Nickname": queue_df["nickname"].fillna("-"),
+        "Data": queue_df["data_referencia"].astype(str),
+        "Valor enviado": queue_df["catches"].map(format_int),
+        "Tipo": queue_df["periodo_tipo"],
+        "Status": queue_df["status"].map(curation_status_label),
+        "Observacoes": queue_df["observacao"].fillna(""),
+        "Timestamp": queue_df["created_at"].map(format_datetime_value),
+    })
+
+    with st.container(key="curation_queue_shell"):
+        st.dataframe(
+            queue_view,
+            hide_index=True,
+            use_container_width=True,
+            height=min(500, 92 + len(queue_view) * 38),
+        )
+
+        prev_col, page_col, next_col = st.columns([0.24, 0.52, 0.24], vertical_alignment="center")
+        with prev_col:
+            if st.button("Anterior", key="curation_prev", disabled=st.session_state[page_key] <= 0):
+                st.session_state[page_key] -= 1
+                st.rerun()
+        with page_col:
+            ui_html(f'<div class="page-note">Página {st.session_state[page_key] + 1} de {page_count}</div>')
+        with next_col:
+            if st.button("Próxima", key="curation_next", disabled=st.session_state[page_key] >= page_count - 1):
+                st.session_state[page_key] += 1
+                st.rerun()
+
+    labels = [
+        f"#{row['id']} · {row.get('nickname') or '-'} · {row.get('usuario_email') or '-'} · {format_int(row['catches'])}"
+        for row in records
+    ]
+    selected_label = st.selectbox("Registro para revisar", labels, key="curation_selected_record")
+    selected_record = records[labels.index(selected_label)]
+    record_id = int(selected_record["id"])
+    can_review = selected_record["status"] == "pendente"
+
+    with st.container(key="curation_review_shell"):
+        left, right = st.columns([0.54, 0.46], vertical_alignment="top")
+        with left:
+            st.markdown("#### Detalhes")
+            st.write(f"Usuario: {selected_record.get('usuario_nome') or '-'}")
+            st.write(f"Email: {selected_record.get('usuario_email') or '-'}")
+            st.write(f"Nickname: {selected_record.get('nickname') or '-'}")
+            st.write(f"Data: {selected_record.get('data_referencia')}")
+            st.write(f"Valor enviado: {format_int(selected_record.get('catches', 0))}")
+            st.write(f"Tipo: {selected_record.get('periodo_tipo')}")
+        with right:
+            with st.form(f"curation_action_form_{record_id}"):
+                admin_note = st.text_area("Observação da curadoria", max_chars=500, height=126)
+                action_col_approve, action_col_reject = st.columns(2)
+                with action_col_approve:
+                    approve_clicked = st.form_submit_button("Aprovar", type="primary", disabled=not can_review)
+                with action_col_reject:
+                    reject_clicked = st.form_submit_button("Rejeitar", disabled=not can_review)
+
+        if approve_clicked:
+            result = approve_record(
+                record_id,
+                admin_note=admin_note,
+                admin_user_id=profile.get("id"),
+                require_admin=True,
+            )
+            if result.get("success"):
+                clear_dashboard_caches()
+                clear_curation_caches()
+            st.session_state.curation_last_result = result
+            st.rerun()
+
+        if reject_clicked:
+            result = reject_record(
+                record_id,
+                admin_note=admin_note,
+                admin_user_id=profile.get("id"),
+                require_admin=True,
+            )
+            if result.get("success"):
+                clear_curation_caches()
+            st.session_state.curation_last_result = result
+            st.rerun()
+
+
+def render_profile_page(profile, session: AuthSession):
+    try:
+        overview = get_profile_overview(profile["id"])
+    except Exception as exc:
+        st.error(f"Nao foi possivel carregar o perfil. Verifique as migrations do Supabase: {exc}")
+        return
+
+    profile = overview["profile"] or profile
+    entitlement = overview["entitlement"]
+    stats = overview["stats"] or {}
+    history = overview["history"]
+    is_premium = bool(profile.get("is_premium"))
+    premium_label = "Premium" if is_premium else "Free"
+
+    ui_html(f"""
+        <section class="page-hero profile-hero">
+            <div class="eyebrow">Conta</div>
+            <h1 class="page-title">Perfil</h1>
+            <p class="page-copy">
+                Gerencie seus dados, acompanhe seus envios e veja o status da curadoria.
+            </p>
+        </section>
+        <div class="profile-metric-grid">
+            <article class="profile-metric">
+                <div class="profile-metric-label">Plano</div>
+                <div class="profile-metric-value">{escape(premium_label)}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Inputs restantes</div>
+                <div class="profile-metric-value">{entitlement.remaining_this_month}/{entitlement.monthly_limit}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Aprovados</div>
+                <div class="profile-metric-value">{format_int(stats.get("aprovados", 0))}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Pendentes</div>
+                <div class="profile-metric-value">{format_int(stats.get("pendentes", 0))}</div>
+            </article>
+        </div>
+    """)
+
+    tab_names = ["Resumo", "Enviar dados", "Historico", "Sessao"]
+    tabs = st.tabs(tab_names)
+
+    with tabs[0]:
+        left, right = st.columns([0.52, 0.48], vertical_alignment="top")
+        with left:
+            with st.container(key="profile_edit_shell"):
+                with st.form("profile_edit_form"):
+                    nickname = st.text_input("Nickname", value=str(profile.get("nickname") or ""), max_chars=40)
+                    current_country = str(profile.get("pais") or COUNTRIES[0])
+                    country_index = COUNTRIES.index(current_country) if current_country in COUNTRIES else 0
+                    pais = st.selectbox("País", COUNTRIES, index=country_index)
+                    current_state = str(profile.get("estado") or "SP").upper()
+                    state_index = BRAZILIAN_STATES.index(current_state) if current_state in BRAZILIAN_STATES else BRAZILIAN_STATES.index("SP")
+                    estado = st.selectbox("Estado", BRAZILIAN_STATES, index=state_index)
+                    cidade = st.text_input("Cidade", value=str(profile.get("cidade") or ""), max_chars=80)
+                    st.text_input("Email", value=str(profile.get("email") or ""), disabled=True)
+                    submitted = st.form_submit_button("Salvar perfil", type="primary")
+                if submitted:
+                    normalized_profile, profile_errors = validate_profile_fields(nickname, pais, estado, cidade)
+                    if profile_errors:
+                        st.error("; ".join(profile_errors))
+                        return
+                    try:
+                        updated = update_user_profile(
+                            profile["id"],
+                            profile.get("nome") or normalized_profile["nickname"],
+                            normalized_profile["nickname"],
+                            normalized_profile["pais"],
+                            normalized_profile["estado"],
+                            normalized_profile["cidade"],
+                        )
+                        if updated:
+                            st.session_state.current_profile = updated
+                        st.success("Perfil atualizado.")
+                    except Exception:
+                        st.error("Nao foi possivel atualizar o perfil agora.")
+        with right:
+            st.markdown("#### Dados da conta")
+            st.write(f"Email validado: {'sim' if profile.get('email_verified') else 'pendente'}")
+            st.write(f"Nickname: {profile.get('nickname') or '-'}")
+            st.write(f"Localidade: {profile.get('cidade') or '-'} · {profile.get('estado') or '-'} · {profile.get('pais') or '-'}")
+            st.write(f"Data de registro: {format_datetime_value(profile.get('created_at'))}")
+            st.write(f"Ultimo acesso: {format_datetime_value(profile.get('last_seen_at') or profile.get('last_login_at'))}")
+            st.write(f"Total de inputs enviados: {format_int(stats.get('total', 0))}")
+
+    with tabs[1]:
+        render_public_submission_page(profile)
+
+    with tabs[2]:
+        if history:
+            history_df = pd.DataFrame(history)
+            visible_columns = [
+                "id",
+                "nickname",
+                "state",
+                "data_referencia",
+                "catches",
+                "periodo_tipo",
+                "status",
+                "created_at",
+                "reviewed_at",
+                "curadoria_observacao",
+            ]
+            visible_columns = [column for column in visible_columns if column in history_df.columns]
+            st.dataframe(
+                history_df[visible_columns],
+                hide_index=True,
+                use_container_width=True,
+                height=min(520, 92 + len(history_df) * 36),
+            )
+        else:
+            ui_html('<div class="empty-state">Nenhum envio encontrado para sua conta.</div>')
+
+    with tabs[3]:
+        with st.container(key="session_shell"):
+            left, right = st.columns([0.62, 0.38], vertical_alignment="center")
+            with left:
+                st.caption("Sessao Supabase ativa.")
+                st.write(f"Expira em aproximadamente {max(0, session.expires_in // 60)} minutos.")
+                st.write("Tokens sao validados periodicamente com o Supabase Auth e renovados antes de expirar.")
+            with right:
+                if st.button("Sair da conta", type="primary", key="profile_logout_button"):
+                    logout_current_user()
+
+def render_premium_page(profile):
+    is_premium = bool(profile.get("is_premium"))
+    ui_html("""
+        <section class="page-hero premium-hero">
+            <div class="eyebrow">Premium</div>
+            <h1 class="page-title">Plano Premium</h1>
+            <p class="page-copy">
+                Mais capacidade de envio, prioridade de evolucao do produto e base preparada
+                para novos recursos avancados.
+            </p>
+        </section>
+        <div class="premium-grid">
+            <article class="premium-card">
+                <div class="premium-card-label">Mais envios</div>
+                <div class="premium-card-title">Limite ampliado</div>
+                <div class="premium-card-copy">Estrutura pronta para liberar mais inputs mensais e recursos exclusivos.</div>
+            </article>
+            <article class="premium-card">
+                <div class="premium-card-label">Curadoria</div>
+                <div class="premium-card-title">Historico completo</div>
+                <div class="premium-card-copy">Acompanhe status, datas, observacoes e revisoes dos seus registros.</div>
+            </article>
+            <article class="premium-card">
+                <div class="premium-card-label">Futuro</div>
+                <div class="premium-card-title">Recursos avancados</div>
+                <div class="premium-card-copy">Base preparada para alertas, analises pessoais e validacao automatica.</div>
+            </article>
+        </div>
+    """)
+
+    comparison = pd.DataFrame([
+        {"Recurso": "Inputs mensais", "Free": "5", "Premium": "ampliado"},
+        {"Recurso": "Dashboard global", "Free": "incluido", "Premium": "incluido"},
+        {"Recurso": "Historico pessoal", "Free": "incluido", "Premium": "incluido"},
+        {"Recurso": "Funcionalidades futuras", "Free": "limitadas", "Premium": "prioridade"},
+    ])
+    st.dataframe(comparison, hide_index=True, use_container_width=True)
+
+    with st.container(key="premium_cta_shell"):
+        if is_premium:
+            st.success("Seu plano Premium esta ativo.")
+        else:
+            st.markdown("#### Upgrade")
+            st.write("O pagamento acontece em checkout externo. A liberacao premium ocorre por webhook assim que o provedor confirmar o pagamento.")
+            if st.button("Fazer upgrade", type="primary", key="premium_upgrade_button"):
+                try:
+                    checkout = create_upgrade_checkout(profile)
+                    st.session_state.last_checkout = {
+                        "url": checkout.checkout_url,
+                        "provider": checkout.provider,
+                        "reference": checkout.payment.get("external_reference"),
+                    }
+                except Exception as exc:
+                    st.error(f"Nao foi possivel iniciar o checkout: {exc}")
+
+            checkout = st.session_state.get("last_checkout")
+            if checkout:
+                if checkout.get("url"):
+                    st.link_button("Ir para checkout externo", checkout["url"], type="primary")
+                else:
+                    st.info("Checkout externo ainda nao configurado. Defina PAYMENT_CHECKOUT_URL e o provedor desejado.")
+                st.caption(f"Referencia: {checkout.get('reference')} | Provedor: {checkout.get('provider')}")
+
+    with st.expander("FAQ"):
+        st.write("Como a conta vira Premium? O provedor envia um webhook assinado para a camada de pagamento, que marca o pagamento como pago e ativa o usuario.")
+        st.write("Quanto tempo leva? A liberacao deve ocorrer em ate 5-10 minutos depois da confirmacao do provedor.")
+        st.write("Quais provedores estao previstos? Cacto, PagSeguro e Stripe por adapters modulares.")
+
+
 if "dark_theme" not in st.session_state:
     st.session_state.dark_theme = True
 
 inject_css(st.session_state.dark_theme)
+session, profile = require_authenticated_user()
 page_param = str(st.query_params.get("page", "")).strip().lower()
-page_options = ["Dashboard", "Enviar dados"]
-if ENABLE_ADMIN and ADMIN_PASSWORD:
-    page_options.append("Admin")
+page_options = ["Dashboard", "Perfil", "Premium"]
+if user_is_admin(profile):
+    page_options.append("Curadoria")
 
-if page_param in {"enviar", "enviar-dados", "submit"}:
-    default_page = "Enviar dados"
-elif page_param == "admin" and "Admin" in page_options:
-    default_page = "Admin"
+if page_param in {"perfil", "profile", "enviar", "enviar-dados", "submit"}:
+    default_page = "Perfil"
+elif page_param in {"premium", "upgrade"}:
+    default_page = "Premium"
+elif page_param in {"curadoria", "admin"} and "Curadoria" in page_options:
+    default_page = "Curadoria"
 else:
     default_page = "Dashboard"
 
 current_page = st.sidebar.radio(
-    "Página",
+    "Pagina",
     page_options,
     index=page_options.index(default_page),
 )
+st.sidebar.caption(f"{profile.get('email', '')} | {'Premium' if profile.get('is_premium') else 'Free'}")
 
 render_navbar()
 
-if current_page == "Enviar dados":
-    render_public_submission_page()
+if current_page == "Perfil":
+    render_profile_page(profile, session)
     render_footer()
     st.stop()
 
-if current_page == "Admin":
-    render_admin_page()
+if current_page == "Premium":
+    render_premium_page(profile)
+    render_footer()
+    st.stop()
+
+if current_page == "Curadoria":
+    render_curation_page(profile)
     render_footer()
     st.stop()
 

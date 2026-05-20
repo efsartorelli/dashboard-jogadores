@@ -24,6 +24,9 @@ MAIN_TABLES = [
     "categorias",
     "historico_processamentos",
     "auditoria_registros",
+    "security_events",
+    "pagamentos",
+    "payment_webhook_logs",
 ]
 
 
@@ -59,13 +62,44 @@ def env_example_is_safe() -> bool:
     if not path.exists():
         return False
 
+    expected_values = {
+        "DATABASE_URL": "",
+        "DATA_SOURCE": "database",
+        "SUPABASE_URL": "",
+        "SUPABASE_ANON_KEY": "",
+        "FREE_MONTHLY_INPUT_LIMIT": "5",
+        "PREMIUM_MONTHLY_INPUT_LIMIT": "50",
+        "AUTH_SESSION_REFRESH_MARGIN_SECONDS": "120",
+        "AUTH_SESSION_VALIDATE_INTERVAL_SECONDS": "300",
+        "PAYMENT_PROVIDER": "manual",
+        "PAYMENT_CHECKOUT_URL": "",
+        "PAYMENT_WEBHOOK_SECRET": "",
+        "PAYMENT_SUCCESS_URL": "",
+        "PAYMENT_CANCEL_URL": "",
+        "PREMIUM_PRICE_CENTS": "1990",
+        "PREMIUM_CURRENCY": "BRL",
+    }
+
+    parsed: dict[str, str] = {}
     content = path.read_text(encoding="utf-8")
-    if "SUA_SENHA" not in content or "seu-projeto" not in content:
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            return False
+        key, value = line.split("=", 1)
+        parsed[key.strip()] = value.strip().strip('"').strip("'")
+
+    if parsed != expected_values:
         return False
 
     suspicious_patterns = [
-        r"postgresql://postgres:[^@\s]*(?:%|[A-Za-z0-9]{12,})@db\.",
-        r"ADMIN_PASSWORD=(?!SUA_SENHA_ADMIN_FORTE).{12,}",
+        r"postgres(?:ql)?://",
+        r"https://[A-Za-z0-9.-]+\.supabase\.co",
+        r"SUPABASE_(?:ANON|SERVICE_ROLE)_KEY=.+",
+        r"PAYMENT_WEBHOOK_SECRET=.+",
+        r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}",
     ]
     return not any(re.search(pattern, content) for pattern in suspicious_patterns)
 
@@ -74,8 +108,10 @@ def main() -> int:
     failures: list[str] = []
 
     data_source = (get_setting("DATA_SOURCE", "auto") or "auto").lower()
-    enable_admin = (get_setting("ENABLE_ADMIN", "false") or "false").lower()
-    admin_password = get_setting("ADMIN_PASSWORD")
+    supabase_url = get_setting("SUPABASE_URL")
+    supabase_anon_key = get_setting("SUPABASE_ANON_KEY")
+    payment_provider = (get_setting("PAYMENT_PROVIDER", "manual") or "manual").lower()
+    payment_webhook_secret = get_setting("PAYMENT_WEBHOOK_SECRET")
 
     if data_source in {"database", "auto", "excel"}:
         ok(f"DATA_SOURCE configurado como {data_source}")
@@ -89,15 +125,18 @@ def main() -> int:
     else:
         warn("DATABASE_URL ausente; o app so podera usar Excel/auto fallback.")
 
-    if enable_admin in {"true", "false"}:
-        ok(f"ENABLE_ADMIN configurado como {enable_admin}")
+    if supabase_url and supabase_anon_key:
+        ok("Supabase Auth configurado")
     else:
-        fail("ENABLE_ADMIN deve ser true ou false.", failures)
+        fail("SUPABASE_URL e SUPABASE_ANON_KEY sao obrigatorios para autenticacao.", failures)
 
-    if enable_admin == "true" and not admin_password:
-        fail("ADMIN_PASSWORD e obrigatorio quando ENABLE_ADMIN=true.", failures)
-    elif enable_admin == "true":
-        ok("ADMIN_PASSWORD configurado")
+    if payment_provider in {"manual", "cacto", "pagseguro", "stripe"}:
+        ok(f"PAYMENT_PROVIDER configurado como {payment_provider}")
+    else:
+        fail("PAYMENT_PROVIDER deve ser manual, cacto, pagseguro ou stripe.", failures)
+
+    if payment_provider != "manual" and not payment_webhook_secret:
+        fail("PAYMENT_WEBHOOK_SECRET e obrigatorio para webhooks de pagamento em producao.", failures)
 
     if is_git_tracked(".env"):
         fail(".env esta versionado no Git. Remova antes do deploy.", failures)
