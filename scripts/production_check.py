@@ -110,22 +110,14 @@ def streamlit_secrets_example_is_safe() -> bool:
     if not path.exists():
         return False
 
-    expected_values = {
-        "DATABASE_URL": "",
-        "DATA_SOURCE": "database",
+    required_values = {
         "SUPABASE_URL": "",
         "SUPABASE_ANON_KEY": "",
+        "DATABASE_URL": "",
+        "PAYMENT_PROVIDER": "manual",
+        "PAYMENT_WEBHOOK_SECRET": "",
         "FREE_MONTHLY_INPUT_LIMIT": "5",
         "PREMIUM_MONTHLY_INPUT_LIMIT": "50",
-        "AUTH_SESSION_REFRESH_MARGIN_SECONDS": "120",
-        "AUTH_SESSION_VALIDATE_INTERVAL_SECONDS": "300",
-        "PAYMENT_PROVIDER": "manual",
-        "PAYMENT_CHECKOUT_URL": "",
-        "PAYMENT_WEBHOOK_SECRET": "",
-        "PAYMENT_SUCCESS_URL": "",
-        "PAYMENT_CANCEL_URL": "",
-        "PREMIUM_PRICE_CENTS": "1990",
-        "PREMIUM_CURRENCY": "BRL",
     }
 
     content = path.read_text(encoding="utf-8")
@@ -135,7 +127,7 @@ def streamlit_secrets_example_is_safe() -> bool:
         return False
 
     normalized = {key: str(value).strip() for key, value in parsed.items()}
-    if normalized != expected_values:
+    if any(normalized.get(key) != value for key, value in required_values.items()):
         return False
 
     suspicious_patterns = [

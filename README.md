@@ -41,6 +41,24 @@ SUPABASE_URL=
 SUPABASE_ANON_KEY=
 ```
 
+Para testar exatamente o mesmo mecanismo usado no Streamlit Cloud, voce tambem
+pode criar `.streamlit/secrets.toml` local. Esse arquivo deve ficar somente na
+sua maquina e ja esta protegido pelo `.gitignore`.
+
+Modelo minimo:
+
+```toml
+SUPABASE_URL = ""
+SUPABASE_ANON_KEY = ""
+DATABASE_URL = ""
+
+PAYMENT_PROVIDER = "manual"
+PAYMENT_WEBHOOK_SECRET = ""
+
+FREE_MONTHLY_INPUT_LIMIT = "5"
+PREMIUM_MONTHLY_INPUT_LIMIT = "50"
+```
+
 `DATA_SOURCE=database` e as chaves do Supabase Auth sao obrigatorios para o
 fluxo SaaS. O modo `excel` continua existindo para manutencao do legado, mas a
 aplicacao autenticada de producao deve usar banco.
@@ -53,7 +71,8 @@ python -m streamlit run app.py
 ### Streamlit Cloud
 
 No Streamlit Cloud, abra o app e va em `Settings` > `Secrets`. Cole os valores
-no formato TOML abaixo, usando as suas credenciais reais:
+no formato TOML abaixo, usando as suas credenciais reais. O app procura primeiro
+em `st.secrets`, depois em variaveis de ambiente e, por fim, no `.env` local.
 
 ```toml
 DATABASE_URL = ""
