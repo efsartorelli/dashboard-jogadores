@@ -8,8 +8,7 @@ import requests
 
 from src.config import (
     AUTH_SESSION_REFRESH_MARGIN_SECONDS,
-    SUPABASE_ANON_KEY,
-    SUPABASE_URL,
+    get_setting,
 )
 from src.security import sanitize_error_message
 
@@ -82,8 +81,8 @@ class AuthSession:
 
 class SupabaseAuthClient:
     def __init__(self, url: str | None = None, anon_key: str | None = None, timeout: int = 12):
-        self.url = (url or SUPABASE_URL or "").rstrip("/")
-        self.anon_key = anon_key or SUPABASE_ANON_KEY or ""
+        self.url = (url or get_setting("SUPABASE_URL") or "").rstrip("/")
+        self.anon_key = anon_key or get_setting("SUPABASE_ANON_KEY") or ""
         self.timeout = timeout
 
     @property

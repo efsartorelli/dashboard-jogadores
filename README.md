@@ -16,25 +16,74 @@ em paginas autenticadas: `Dashboard`, `Perfil` e `Premium`.
 - Psycopg
 - Plotly/Pandas
 
-## Rodando localmente
+## Configuracao segura
 
-```powershell
-pip install -r requirements.txt
-python -m streamlit run app.py
-```
+O projeto usa uma camada centralizada em `src/config/settings.py`.
 
-Copie `.env.example` para `.env` e preencha os valores reais:
+A ordem de leitura e:
+
+1. Streamlit Secrets (`st.secrets`)
+2. variaveis de ambiente
+3. `.env` local carregado com `python-dotenv`
+
+Isso permite rodar localmente com `.env` e em producao no Streamlit Cloud sem
+versionar credenciais. Nunca commite `.env` ou `.streamlit/secrets.toml`.
+
+### Local
+
+Copie `.env.example` para `.env` e preencha os valores reais apenas no seu
+ambiente local:
 
 ```txt
-DATABASE_URL=postgresql://postgres:SUA_SENHA@db.seu-projeto.supabase.co:5432/postgres
+DATABASE_URL=
 DATA_SOURCE=database
-SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_URL=
 SUPABASE_ANON_KEY=
 ```
 
 `DATA_SOURCE=database` e as chaves do Supabase Auth sao obrigatorios para o
 fluxo SaaS. O modo `excel` continua existindo para manutencao do legado, mas a
 aplicacao autenticada de producao deve usar banco.
+
+```powershell
+pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+### Streamlit Cloud
+
+No Streamlit Cloud, abra o app e va em `Settings` > `Secrets`. Cole os valores
+no formato TOML abaixo, usando as suas credenciais reais:
+
+```toml
+DATABASE_URL = ""
+DATA_SOURCE = "database"
+
+SUPABASE_URL = ""
+SUPABASE_ANON_KEY = ""
+
+FREE_MONTHLY_INPUT_LIMIT = "5"
+PREMIUM_MONTHLY_INPUT_LIMIT = "50"
+
+AUTH_SESSION_REFRESH_MARGIN_SECONDS = "120"
+AUTH_SESSION_VALIDATE_INTERVAL_SECONDS = "300"
+
+PAYMENT_PROVIDER = "manual"
+PAYMENT_CHECKOUT_URL = ""
+PAYMENT_WEBHOOK_SECRET = ""
+PAYMENT_SUCCESS_URL = ""
+PAYMENT_CANCEL_URL = ""
+
+PREMIUM_PRICE_CENTS = "1990"
+PREMIUM_CURRENCY = "BRL"
+```
+
+O mesmo modelo fica em `.streamlit/secrets.toml.example`. Se criar um
+`.streamlit/secrets.toml` local, mantenha-o fora do Git.
+
+Referencias oficiais: Streamlit recomenda manter secrets fora do repositorio e
+usar `st.secrets`/Secrets Management para apps Streamlit:
+https://docs.streamlit.io/develop/concepts/connections/secrets-management
 
 ## Supabase
 
@@ -71,6 +120,15 @@ Novos usuarios entram como `jogador`. Para liberar curadoria, ajuste no banco:
 update usuarios set role = 'admin' where email = 'seu-email@dominio.com';
 ```
 
+### Auth, SMTP e Resend
+
+No Supabase, configure `Authentication` > `URL Configuration` com a URL final
+do Streamlit Cloud e os redirect URLs usados pelo app. Para envio de email de
+confirmacao/recuperacao, configure `Authentication` > `SMTP Settings` com o seu
+provedor. Se usar Resend, crie a API key no Resend e cole somente no painel de
+SMTP/Auth do Supabase ou em um secret externo apropriado. Nao coloque chaves de
+SMTP/Resend no codigo nem no Git.
+
 ## Fluxo da aplicacao
 
 1. Usuario cria conta ou entra via Supabase Auth.
@@ -90,7 +148,7 @@ update usuarios set role = 'admin' where email = 'seu-email@dominio.com';
 - Usuarios comuns veem apenas o proprio historico no Perfil.
 - Dados globais do dashboard usam apenas registros aprovados.
 - Rate limiting de envios usa `security_events`.
-- Secrets ficam em variaveis de ambiente ou `st.secrets`.
+- Secrets ficam em Streamlit Secrets, variaveis de ambiente ou `.env` local.
 
 ## Pagamentos
 
@@ -100,10 +158,10 @@ Variaveis principais:
 
 ```txt
 PAYMENT_PROVIDER=cacto
-PAYMENT_CHECKOUT_URL=https://checkout.externo/...
+PAYMENT_CHECKOUT_URL=
 PAYMENT_WEBHOOK_SECRET=
-PAYMENT_SUCCESS_URL=https://seu-app/premium?status=success
-PAYMENT_CANCEL_URL=https://seu-app/premium?status=cancel
+PAYMENT_SUCCESS_URL=
+PAYMENT_CANCEL_URL=
 ```
 
 Fluxo:
@@ -121,10 +179,11 @@ webhooks diretamente.
 
 ## Deploy
 
-1. Configure as variaveis de `.env.example` no ambiente de deploy.
+1. Configure os secrets no Streamlit Cloud em `Settings` > `Secrets`.
 2. Aplique todas as migrations no Supabase.
 3. Rode `python scripts/production_check.py`.
-4. Inicie com:
+4. Configure o deploy apontando para `app.py`.
+5. Para servidores proprios, inicie com:
 
 ```powershell
 python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501

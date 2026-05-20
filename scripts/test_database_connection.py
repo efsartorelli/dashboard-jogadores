@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -9,24 +8,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from src.database.connection import get_database_url
 from src.security import sanitize_error_message
-
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
-
-
-if load_dotenv is not None:
-    load_dotenv(ROOT_DIR / ".env")
-
-env_path = ROOT_DIR / ".env"
-if env_path.exists():
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        if not line or line.strip().startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip().lstrip("\ufeff"), value.strip().strip('"').strip("'"))
 
 
 MAIN_TABLES = [
@@ -43,9 +26,9 @@ MAIN_TABLES = [
 
 
 def main() -> int:
-    database_url = os.getenv("DATABASE_URL")
+    database_url = get_database_url()
     if not database_url:
-        print("ERRO: DATABASE_URL nao encontrada. Configure o arquivo .env.")
+        print("ERRO: DATABASE_URL nao encontrada. Configure .env local, variaveis de ambiente ou Streamlit Secrets.")
         return 1
 
     try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -104,6 +105,49 @@ def env_example_is_safe() -> bool:
     return not any(re.search(pattern, content) for pattern in suspicious_patterns)
 
 
+def streamlit_secrets_example_is_safe() -> bool:
+    path = ROOT_DIR / ".streamlit" / "secrets.toml.example"
+    if not path.exists():
+        return False
+
+    expected_values = {
+        "DATABASE_URL": "",
+        "DATA_SOURCE": "database",
+        "SUPABASE_URL": "",
+        "SUPABASE_ANON_KEY": "",
+        "FREE_MONTHLY_INPUT_LIMIT": "5",
+        "PREMIUM_MONTHLY_INPUT_LIMIT": "50",
+        "AUTH_SESSION_REFRESH_MARGIN_SECONDS": "120",
+        "AUTH_SESSION_VALIDATE_INTERVAL_SECONDS": "300",
+        "PAYMENT_PROVIDER": "manual",
+        "PAYMENT_CHECKOUT_URL": "",
+        "PAYMENT_WEBHOOK_SECRET": "",
+        "PAYMENT_SUCCESS_URL": "",
+        "PAYMENT_CANCEL_URL": "",
+        "PREMIUM_PRICE_CENTS": "1990",
+        "PREMIUM_CURRENCY": "BRL",
+    }
+
+    content = path.read_text(encoding="utf-8")
+    try:
+        parsed = tomllib.loads(content)
+    except tomllib.TOMLDecodeError:
+        return False
+
+    normalized = {key: str(value).strip() for key, value in parsed.items()}
+    if normalized != expected_values:
+        return False
+
+    suspicious_patterns = [
+        r"postgres(?:ql)?://",
+        r"https://[A-Za-z0-9.-]+\.supabase\.co",
+        r"SUPABASE_(?:ANON|SERVICE_ROLE)_KEY\s*=\s*['\"]?[^'\"\s]+",
+        r"PAYMENT_WEBHOOK_SECRET\s*=\s*['\"]?[^'\"\s]+",
+        r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}",
+    ]
+    return not any(re.search(pattern, content) for pattern in suspicious_patterns)
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -143,10 +187,20 @@ def main() -> int:
     else:
         ok(".env nao esta versionado")
 
+    if is_git_tracked(".streamlit/secrets.toml"):
+        fail(".streamlit/secrets.toml esta versionado no Git. Remova antes do deploy.", failures)
+    else:
+        ok(".streamlit/secrets.toml nao esta versionado")
+
     if env_example_is_safe():
         ok(".env.example nao contem segredo real aparente")
     else:
         fail(".env.example ausente ou com conteudo sensivel/suspeito.", failures)
+
+    if streamlit_secrets_example_is_safe():
+        ok(".streamlit/secrets.toml.example nao contem segredo real aparente")
+    else:
+        fail(".streamlit/secrets.toml.example ausente ou com conteudo sensivel/suspeito.", failures)
 
     if has_database_config():
         try:

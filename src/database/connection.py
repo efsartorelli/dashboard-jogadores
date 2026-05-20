@@ -1,27 +1,8 @@
-import os
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Iterator
 
 from src.config import get_setting
 from src.security import sanitize_error_message
-
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
-
-
-if load_dotenv is not None:
-    load_dotenv()
-
-env_path = Path(__file__).resolve().parents[2] / ".env"
-if env_path.exists():
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        if not line or line.strip().startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip().lstrip("\ufeff"), value.strip().strip('"').strip("'"))
 
 
 class DatabaseUnavailable(RuntimeError):

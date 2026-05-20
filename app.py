@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.auth import AuthError, AuthSession, get_auth_client
-from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE
+from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, validate_required_settings
 from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
@@ -249,8 +249,9 @@ def render_auth_page():
     """)
 
     client = get_auth_client()
-    if not client.is_configured:
-        st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY.")
+    auth_config = validate_required_settings(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
+    if not client.is_configured or not auth_config.ok:
+        st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY nos secrets do ambiente.")
         return
 
     feedback = st.session_state.pop("auth_feedback", None)

@@ -28,6 +28,18 @@ API, jobs assíncronos e cache sem redesenhar a interface.
 - Triggers impedem que usuarios comuns alterem `role`, `is_premium` ou limite mensal.
 - Trigger de insert em `registros_periodicos` bloqueia bypass do limite mensal no banco.
 
+## Secrets e configuracao
+
+- `src/config/settings.py` centraliza todas as configuracoes.
+- Prioridade: Streamlit Secrets, variaveis de ambiente e `.env` local carregado
+  com `python-dotenv` sem sobrescrever variaveis reais do ambiente.
+- `.env` e `.streamlit/secrets.toml` sao arquivos locais sensiveis e nao devem
+  ser versionados.
+- `.env.example` e `.streamlit/secrets.toml.example` ficam no repositorio apenas
+  com placeholders vazios ou valores genericos seguros.
+- O app nunca imprime tokens, URLs com senha ou payloads sensiveis em mensagens
+  de erro para usuario.
+
 ## Pagamentos
 
 O Streamlit inicia o checkout e grava `pagamentos.external_reference`. A confirmacao

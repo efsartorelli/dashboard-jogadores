@@ -7,13 +7,7 @@ import json
 from typing import Any
 from urllib.parse import urlencode
 
-from src.config import (
-    PAYMENT_CANCEL_URL,
-    PAYMENT_CHECKOUT_URL,
-    PAYMENT_PROVIDER,
-    PAYMENT_SUCCESS_URL,
-    PAYMENT_WEBHOOK_SECRET,
-)
+from src.config import get_setting
 
 
 @dataclass(frozen=True)
@@ -37,7 +31,8 @@ class PaymentProvider:
     name = "manual"
 
     def create_checkout(self, request: CheckoutRequest) -> CheckoutResult:
-        if not PAYMENT_CHECKOUT_URL:
+        checkout_url = get_setting("PAYMENT_CHECKOUT_URL")
+        if not checkout_url:
             return CheckoutResult(self.name, None, request.external_reference)
 
         params = {
@@ -48,20 +43,22 @@ class PaymentProvider:
             "amount_cents": request.amount_cents,
             "currency": request.currency,
         }
-        if PAYMENT_SUCCESS_URL:
-            params["success_url"] = PAYMENT_SUCCESS_URL
-        if PAYMENT_CANCEL_URL:
-            params["cancel_url"] = PAYMENT_CANCEL_URL
+        success_url = get_setting("PAYMENT_SUCCESS_URL")
+        cancel_url = get_setting("PAYMENT_CANCEL_URL")
+        if success_url:
+            params["success_url"] = success_url
+        if cancel_url:
+            params["cancel_url"] = cancel_url
 
-        separator = "&" if "?" in PAYMENT_CHECKOUT_URL else "?"
+        separator = "&" if "?" in checkout_url else "?"
         return CheckoutResult(
             self.name,
-            f"{PAYMENT_CHECKOUT_URL}{separator}{urlencode(params)}",
+            f"{checkout_url}{separator}{urlencode(params)}",
             request.external_reference,
         )
 
     def verify_webhook_signature(self, raw_body: bytes, headers: dict[str, str]) -> bool:
-        secret = PAYMENT_WEBHOOK_SECRET
+        secret = get_setting("PAYMENT_WEBHOOK_SECRET")
         if not secret:
             return False
 
@@ -128,7 +125,7 @@ class StripeProvider(PaymentProvider):
 
 
 def get_payment_provider(provider: str | None = None) -> PaymentProvider:
-    selected = (provider or PAYMENT_PROVIDER or "manual").strip().lower()
+    selected = (provider or get_setting("PAYMENT_PROVIDER", "manual") or "manual").strip().lower()
     if selected == "cacto":
         return CactoProvider()
     if selected == "pagseguro":
