@@ -68,6 +68,7 @@ def env_example_is_safe() -> bool:
         "DATA_SOURCE": "database",
         "SUPABASE_URL": "",
         "SUPABASE_ANON_KEY": "",
+        "SUPABASE_AUTH_REDIRECT_URL": "",
         "FREE_MONTHLY_INPUT_LIMIT": "5",
         "PREMIUM_MONTHLY_INPUT_LIMIT": "50",
         "AUTH_SESSION_REFRESH_MARGIN_SECONDS": "120",
@@ -113,6 +114,7 @@ def streamlit_secrets_example_is_safe() -> bool:
     required_values = {
         "SUPABASE_URL": "",
         "SUPABASE_ANON_KEY": "",
+        "SUPABASE_AUTH_REDIRECT_URL": "",
         "DATABASE_URL": "",
         "PAYMENT_PROVIDER": "manual",
         "PAYMENT_WEBHOOK_SECRET": "",

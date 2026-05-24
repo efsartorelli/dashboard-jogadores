@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import time
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -146,6 +147,7 @@ class SupabaseAuthClient:
         pais: str | None = None,
         estado: str | None = None,
         cidade: str | None = None,
+        redirect_to: str | None = None,
     ) -> AuthSession | None:
         payload = {
             "email": email.strip().lower(),
@@ -159,7 +161,10 @@ class SupabaseAuthClient:
                 "cidade": (cidade or "").strip(),
             },
         }
-        response = self._request("POST", "/auth/v1/signup", json=payload)
+        path = "/auth/v1/signup"
+        if redirect_to:
+            path = f"{path}?redirect_to={quote(redirect_to, safe='')}"
+        response = self._request("POST", path, json=payload)
         if response.get("access_token"):
             return AuthSession.from_token_response(response)
         return None

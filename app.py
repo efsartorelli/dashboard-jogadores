@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.auth import AuthError, AuthSession, get_auth_client
-from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, validate_required_settings
+from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, get_setting, validate_required_settings
 from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
@@ -172,80 +172,15 @@ def record_auth_attempt() -> None:
 
 def render_auth_page():
     ui_html("""
-        <section class="landing-hero section-anchor">
-            <div class="landing-grid">
-                <div>
-                    <div class="eyebrow">Ranking BR · comunidade Pokemon GO</div>
-                    <h1 class="hero-title">Transparencia, historico e reconhecimento para jogadores brasileiros</h1>
-                    <p class="hero-copy">
-                        Uma plataforma criada e mantida por Enzo para organizar dados da comunidade,
-                        preservar a evolucao dos jogadores e dar visibilidade a quem constrói o cenário
-                        competitivo brasileiro.
-                    </p>
-                    <div class="hero-actions">
-                        <a class="rb-button primary" href="#auth">Entrar ou registrar</a>
-                        <a class="rb-button" href="#sobre-plataforma">Conhecer o projeto</a>
-                    </div>
-                </div>
-                <div class="hero-stat-grid">
-                    <article class="stat-card">
-                        <div class="stat-label">Dados organizados</div>
-                        <div class="stat-value">Curadoria</div>
-                    </article>
-                    <article class="stat-card">
-                        <div class="stat-label">Contas free</div>
-                        <div class="stat-value">5/mês</div>
-                    </article>
-                    <article class="stat-card">
-                        <div class="stat-label">Evolucao futura</div>
-                        <div class="stat-value">Premium</div>
-                    </article>
+        <section class="auth-page section-anchor">
+            <div class="auth-brand">
+                <div class="brand-orb auth-brand-orb">BR</div>
+                <div class="auth-brand-text">
+                    <div class="auth-title">PokéGO Brasil</div>
+                    <div class="auth-subtitle">Ranking nacional competitivo de Pokémon GO</div>
                 </div>
             </div>
         </section>
-        <section id="sobre-plataforma" class="landing-section section-anchor">
-            <div class="section-head">
-                <div>
-                    <div class="section-kicker">Projeto</div>
-                    <h2 class="section-title">Um histórico confiável para a comunidade</h2>
-                    <p class="section-copy">
-                        O Ranking BR centraliza registros, compara evolucao, organiza estados e cria
-                        uma base revisada para que os dados tenham contexto, rastreabilidade e consistência.
-                    </p>
-                </div>
-            </div>
-            <div class="premium-grid">
-                <article class="premium-card">
-                    <div class="premium-card-label">Comunidade</div>
-                    <div class="premium-card-title">Trabalho contínuo</div>
-                    <div class="premium-card-copy">Enzo estruturou o painel para transformar registros soltos em uma base consultável e historica.</div>
-                </article>
-                <article class="premium-card">
-                    <div class="premium-card-label">Curadoria</div>
-                    <div class="premium-card-title">Dados revisados</div>
-                    <div class="premium-card-copy">Inputs enviados por usuarios passam por revisão antes de entrar no ranking global.</div>
-                </article>
-                <article class="premium-card">
-                    <div class="premium-card-label">SaaS</div>
-                    <div class="premium-card-title">Preparado para crescer</div>
-                    <div class="premium-card-copy">Contas, limites mensais, perfil, premium e permissões foram desenhados para operação real.</div>
-                </article>
-            </div>
-        </section>
-        <section class="landing-section section-anchor">
-            <div class="section-head">
-                <div>
-                    <div class="section-kicker">Participacao</div>
-                    <h2 class="section-title">Entre para enviar seus dados</h2>
-                    <p class="section-copy">
-                        Usuarios logados podem enviar registros proprios, acompanhar status de curadoria
-                        e editar nickname e localidade no perfil. Contas free possuem limite mensal; o
-                        plano premium recebera recursos extras futuramente.
-                    </p>
-                </div>
-            </div>
-        </section>
-        <div id="auth" class="section-anchor"></div>
     """)
 
     client = get_auth_client()
@@ -254,87 +189,99 @@ def render_auth_page():
         st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY nos secrets do ambiente.")
         return
 
+    # Supabase envia emails de confirmacao/recuperacao. O SMTP profissional
+    # deve ser configurado no painel do Supabase, nao em codigo Streamlit.
+    email_redirect_to = get_setting("SUPABASE_AUTH_REDIRECT_URL")
+
     feedback = st.session_state.pop("auth_feedback", None)
     if feedback:
         level, message = feedback
         getattr(st, level)(message)
 
-    login_tab, signup_tab, recover_tab = st.tabs(["Entrar", "Criar conta", "Recuperar senha"])
+    with st.container(key="auth_card_shell"):
+        login_tab, signup_tab, recover_tab = st.tabs(["Entrar", "Criar conta", "Recuperar senha"])
 
-    with login_tab:
-        with st.container(key="auth_login_shell"):
-            with st.form("login_form"):
-                email = st.text_input("Email", key="login_email").strip().lower()
-                password = st.text_input("Senha", type="password", key="login_password")
-                submitted = st.form_submit_button("Entrar", type="primary")
+        with login_tab:
+            with st.container(key="auth_login_shell"):
+                st.caption("Acesse sua conta para abrir o dashboard.")
+                with st.form("login_form"):
+                    email = st.text_input("Email", key="login_email").strip().lower()
+                    password = st.text_input("Senha", type="password", key="login_password")
+                    submitted = st.form_submit_button("Entrar", type="primary")
+                st.caption("Novo por aqui ou esqueceu a senha? Use as abas acima.")
 
-            if submitted:
-                if not auth_attempt_allowed():
-                    st.error("Muitas tentativas de login. Aguarde alguns minutos.")
-                    return
-                record_auth_attempt()
-                try:
-                    session = client.sign_in(email, password)
-                    store_auth_session(session)
-                    st.rerun()
-                except AuthError as exc:
-                    st.error(str(exc))
-
-    with signup_tab:
-        with st.container(key="auth_signup_shell"):
-            with st.form("signup_form"):
-                nickname = st.text_input("Nickname", max_chars=40, key="signup_nickname")
-                email = st.text_input("Email", key="signup_email").strip().lower()
-                pais = st.selectbox("País", COUNTRIES, index=0, key="signup_country")
-                estado = st.selectbox("Estado", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"), key="signup_state")
-                cidade = st.text_input("Cidade", max_chars=80, key="signup_city")
-                password = st.text_input("Senha", type="password", key="signup_password")
-                confirm = st.text_input("Confirmar senha", type="password", key="signup_confirm")
-                accepted = st.checkbox("Li e aceito os termos de uso da plataforma.", key="signup_terms")
-                submitted = st.form_submit_button("Criar conta", type="primary")
-
-            if submitted:
-                normalized_profile, profile_errors = validate_profile_fields(nickname, pais, estado, cidade)
-                if profile_errors:
-                    st.error("; ".join(profile_errors))
-                    return
-                if len(password) < 8:
-                    st.error("Use uma senha com pelo menos 8 caracteres.")
-                    return
-                if password != confirm:
-                    st.error("As senhas nao conferem.")
-                    return
-                if not accepted:
-                    st.error("Aceite os termos para criar a conta.")
-                    return
-                try:
-                    session = client.sign_up(
-                        email,
-                        password,
-                        name=normalized_profile["nickname"],
-                        nickname=normalized_profile["nickname"],
-                        pais=normalized_profile["pais"],
-                        estado=normalized_profile["estado"],
-                        cidade=normalized_profile["cidade"],
-                    )
-                    if session:
+                if submitted:
+                    if not auth_attempt_allowed():
+                        st.error("Muitas tentativas de login. Aguarde alguns minutos.")
+                        return
+                    record_auth_attempt()
+                    try:
+                        session = client.sign_in(email, password)
                         store_auth_session(session)
                         st.rerun()
-                    st.success("Conta criada. Verifique seu email para validar o acesso.")
-                except AuthError as exc:
-                    st.error(str(exc))
+                    except AuthError as exc:
+                        st.error(str(exc))
 
-    with recover_tab:
-        with st.container(key="auth_recover_shell"):
-            with st.form("recover_form"):
-                email = st.text_input("Email da conta", key="recover_email").strip().lower()
-                submitted = st.form_submit_button("Enviar recuperacao", type="primary")
-            if submitted:
-                try:
-                    client.recover_password(email)
-                    st.success("Se o email existir, enviaremos o link de recuperacao.")
-                except AuthError as exc:
-                    st.error(str(exc))
+        with signup_tab:
+            with st.container(key="auth_signup_shell"):
+                st.caption("Crie seu acesso com os dados usados no ranking.")
+                with st.form("signup_form"):
+                    nickname = st.text_input("Nickname", max_chars=40, key="signup_nickname")
+                    email = st.text_input("Email", key="signup_email").strip().lower()
+                    pais = st.selectbox("Pais", COUNTRIES, index=0, key="signup_country")
+                    estado = st.selectbox("Estado (UF)", BRAZILIAN_STATES, index=BRAZILIAN_STATES.index("SP"), key="signup_state")
+                    cidade = st.text_input("Cidade", max_chars=80, key="signup_city")
+                    password = st.text_input("Senha", type="password", key="signup_password")
+                    confirm = st.text_input("Confirmar senha", type="password", key="signup_confirm")
+                    accepted = st.checkbox("Li e aceito os termos de uso da plataforma.", key="signup_terms")
+                    submitted = st.form_submit_button("Criar conta", type="primary")
+                st.caption("Os dados enviados podem passar por revisao antes de entrar no ranking principal.")
+
+                if submitted:
+                    normalized_profile, profile_errors = validate_profile_fields(nickname, pais, estado, cidade)
+                    if profile_errors:
+                        st.error("; ".join(profile_errors))
+                        return
+                    if len(password) < 8:
+                        st.error("Use uma senha com pelo menos 8 caracteres.")
+                        return
+                    if password != confirm:
+                        st.error("As senhas nao conferem.")
+                        return
+                    if not accepted:
+                        st.error("Aceite os termos para criar a conta.")
+                        return
+                    try:
+                        session = client.sign_up(
+                            email,
+                            password,
+                            name=normalized_profile["nickname"],
+                            nickname=normalized_profile["nickname"],
+                            pais=normalized_profile["pais"],
+                            estado=normalized_profile["estado"],
+                            cidade=normalized_profile["cidade"],
+                            redirect_to=email_redirect_to,
+                        )
+                        if session:
+                            store_auth_session(session)
+                            st.rerun()
+                        st.success("Conta criada. Verifique seu email para validar o acesso.")
+                    except AuthError as exc:
+                        st.error(str(exc))
+
+        with recover_tab:
+            with st.container(key="auth_recover_shell"):
+                st.caption("Informe seu email para receber as instrucoes de acesso.")
+                with st.form("recover_form"):
+                    email = st.text_input("Email da conta", key="recover_email").strip().lower()
+                    submitted = st.form_submit_button("Enviar recuperacao", type="primary")
+                st.caption("Se houver uma conta vinculada a este email, voce recebera instrucoes para redefinir a senha.")
+                if submitted:
+                    try:
+                        client.recover_password(email, redirect_to=email_redirect_to)
+                        st.success("Se o email existir, enviaremos o link de recuperacao.")
+                    except AuthError as exc:
+                        st.error(str(exc))
 
 
 def require_authenticated_user() -> tuple[AuthSession, dict]:
@@ -1850,31 +1797,86 @@ def inject_css(dark_mode):
         line-height: 1.62;
     }}
 
-    .landing-hero,
-    .landing-section {{
-        margin-bottom: 1rem;
+    .auth-page {{
+        width: min(100%, 560px);
+        margin: clamp(0.25rem, 4vh, 2.4rem) auto 1rem;
+        display: grid;
+        place-items: center;
+    }}
+
+    .auth-brand {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.95rem;
+        text-align: left;
+    }}
+
+    .auth-brand-orb {{
+        width: 52px;
+        height: 52px;
+        font-size: 1rem;
+    }}
+
+    .auth-brand-text {{
+        min-width: 0;
+    }}
+
+    .auth-title {{
+        color: var(--rb-text);
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: 0;
+    }}
+
+    .auth-subtitle {{
+        margin-top: 0.42rem;
+        color: var(--rb-muted);
+        font-size: clamp(0.86rem, 2vw, 1rem);
+        font-weight: 720;
+        line-height: 1.35;
+    }}
+
+    .st-key-auth_card_shell {{
+        width: min(100%, 520px);
+        margin: 0 auto clamp(1rem, 4vh, 2rem);
         border: 1px solid var(--rb-border);
         border-radius: var(--rb-radius-lg);
-        background: linear-gradient(150deg, var(--rb-card), var(--rb-card-3));
-        box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+        padding: clamp(0.95rem, 3vw, 1.35rem);
+        background:
+            linear-gradient(150deg, rgba(19,27,36,0.92), rgba(9,14,20,0.78)),
+            radial-gradient(circle at 20% 0%, rgba(76,201,176,0.13), transparent 15rem);
+        box-shadow: var(--rb-shadow), inset 0 1px 0 rgba(255,255,255,0.055);
     }}
 
-    .landing-hero {{
-        padding: clamp(1.3rem, 3vw, 2.6rem);
-        min-height: 360px;
+    .st-key-auth_login_shell,
+    .st-key-auth_signup_shell,
+    .st-key-auth_recover_shell {{
+        padding-top: 0.85rem;
+    }}
+
+    .st-key-auth_card_shell .stTabs [data-baseweb="tab-list"] {{
         display: grid;
-        align-items: center;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.35rem;
+        padding: 0.18rem;
+        border: 1px solid var(--rb-line);
+        border-radius: var(--rb-radius-md);
+        background: rgba(255,255,255,0.035);
     }}
 
-    .landing-section {{
-        padding: clamp(1rem, 2.6vw, 1.55rem);
+    .st-key-auth_card_shell .stTabs [data-baseweb="tab"] {{
+        justify-content: center;
+        border-radius: calc(var(--rb-radius-md) - 2px);
+        min-height: 38px;
+        padding: 0.35rem 0.42rem;
+        font-size: 0.82rem;
     }}
 
-    .landing-grid {{
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(360px, 0.74fr);
-        gap: clamp(1.2rem, 4vw, 3.5rem);
-        align-items: center;
+    .st-key-auth_card_shell .stTabs [aria-selected="true"] {{
+        background: linear-gradient(145deg, rgba(76,201,176,0.22), rgba(226,184,79,0.14)) !important;
+        box-shadow: inset 0 0 0 1px rgba(226,184,79,0.22);
     }}
 
     .profile-metric-grid,
@@ -1922,9 +1924,6 @@ def inject_css(dark_mode):
         line-height: 1.52;
     }}
 
-    .st-key-auth_login_shell,
-    .st-key-auth_signup_shell,
-    .st-key-auth_recover_shell,
     .st-key-public_submission_shell,
     .st-key-profile_edit_shell,
     .st-key-session_shell,
@@ -2044,10 +2043,6 @@ def inject_css(dark_mode):
 
     @media (max-width: 1200px) {{
         .hero-grid {{
-            grid-template-columns: 1fr;
-        }}
-
-        .landing-grid {{
             grid-template-columns: 1fr;
         }}
 
@@ -2180,6 +2175,32 @@ def inject_css(dark_mode):
         .profile-metric-grid,
         .premium-grid {{
             grid-template-columns: 1fr;
+        }}
+
+        .auth-page {{
+            margin-top: 0.15rem;
+        }}
+
+        .auth-brand {{
+            align-items: flex-start;
+            justify-content: flex-start;
+            width: min(100%, 520px);
+        }}
+
+        .auth-brand-orb {{
+            width: 44px;
+            height: 44px;
+        }}
+
+        .st-key-auth_card_shell {{
+            padding: 0.85rem;
+        }}
+
+        .st-key-auth_card_shell .stTabs [data-baseweb="tab"] {{
+            min-height: 42px;
+            font-size: 0.76rem;
+            line-height: 1.15;
+            white-space: normal;
         }}
 
         .hero,

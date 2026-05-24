@@ -39,6 +39,7 @@ DATABASE_URL=
 DATA_SOURCE=database
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+SUPABASE_AUTH_REDIRECT_URL=
 ```
 
 Para testar exatamente o mesmo mecanismo usado no Streamlit Cloud, voce tambem
@@ -50,6 +51,7 @@ Modelo minimo:
 ```toml
 SUPABASE_URL = ""
 SUPABASE_ANON_KEY = ""
+SUPABASE_AUTH_REDIRECT_URL = ""
 DATABASE_URL = ""
 
 PAYMENT_PROVIDER = "manual"
@@ -80,6 +82,7 @@ DATA_SOURCE = "database"
 
 SUPABASE_URL = ""
 SUPABASE_ANON_KEY = ""
+SUPABASE_AUTH_REDIRECT_URL = ""
 
 FREE_MONTHLY_INPUT_LIMIT = "5"
 PREMIUM_MONTHLY_INPUT_LIMIT = "50"
@@ -142,11 +145,15 @@ update usuarios set role = 'admin' where email = 'seu-email@dominio.com';
 ### Auth, SMTP e Resend
 
 No Supabase, configure `Authentication` > `URL Configuration` com a URL final
-do Streamlit Cloud e os redirect URLs usados pelo app. Para envio de email de
-confirmacao/recuperacao, configure `Authentication` > `SMTP Settings` com o seu
-provedor. Se usar Resend, crie a API key no Resend e cole somente no painel de
-SMTP/Auth do Supabase ou em um secret externo apropriado. Nao coloque chaves de
-SMTP/Resend no codigo nem no Git.
+do Streamlit Cloud em `Site URL` e tambem em `Redirect URLs`. Use o mesmo valor
+em `SUPABASE_AUTH_REDIRECT_URL` para links de confirmacao/recuperacao enviados
+pelo Supabase Auth.
+
+Para envio de email de confirmacao/recuperacao, configure `Authentication` >
+`SMTP Settings` com o seu provedor, como o email profissional da HostGator. Se
+usar Resend, crie a API key no Resend e cole somente no painel de SMTP/Auth do
+Supabase ou em um secret externo apropriado. Nao coloque chaves de SMTP/Resend
+no codigo nem no Git.
 
 ## Fluxo da aplicacao
 
