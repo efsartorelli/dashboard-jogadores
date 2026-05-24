@@ -55,6 +55,11 @@ def get_data(_fingerprint):
     return load_dashboard_data().data
 
 
+@st.cache_data(show_spinner=False, ttl=60)
+def get_data_fingerprint_cached():
+    return get_data_source_fingerprint()
+
+
 @st.cache_data(show_spinner=False)
 def get_best_catches(data):
     return compute_best_catches(data)
@@ -93,11 +98,22 @@ def get_curation_queue(admin_user_id, status, search, order_by, order_direction,
     )
 
 
+@st.cache_resource(show_spinner=False)
+def get_cached_auth_client():
+    return get_auth_client()
+
+
+@st.cache_data(show_spinner=False, ttl=60)
+def get_profile_overview_cached(user_id, profile_updated_at=None):
+    return get_profile_overview(user_id)
+
+
 def ui_html(markup):
     st.html(markup)
 
 
 def clear_dashboard_caches():
+    get_data_fingerprint_cached.clear()
     get_data.clear()
     get_best_catches.clear()
     build_general_ranking.clear()
@@ -108,6 +124,10 @@ def clear_dashboard_caches():
 
 def clear_curation_caches():
     get_curation_queue.clear()
+
+
+def clear_profile_caches():
+    get_profile_overview_cached.clear()
 
 
 def render_feedback(result, success_message, info_message=None):
@@ -150,7 +170,7 @@ def logout_current_user() -> None:
     session = get_session_from_state()
     if session:
         try:
-            get_auth_client().sign_out(session.access_token)
+            get_cached_auth_client().sign_out(session.access_token)
         except AuthError:
             pass
     clear_auth_session()
@@ -183,7 +203,7 @@ def render_auth_page():
         </section>
     """)
 
-    client = get_auth_client()
+    client = get_cached_auth_client()
     auth_config = validate_required_settings(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
     if not client.is_configured or not auth_config.ok:
         st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY nos secrets do ambiente.")
@@ -285,22 +305,33 @@ def render_auth_page():
 
 
 def require_authenticated_user() -> tuple[AuthSession, dict]:
-    client = get_auth_client()
+    client = get_cached_auth_client()
     session = get_session_from_state()
     if not session:
         render_auth_page()
         st.stop()
 
     try:
+        should_sync_profile = False
         if session.should_refresh:
             session = client.refresh(session.refresh_token)
             store_auth_session(session)
+            should_sync_profile = True
 
         last_validated = int(st.session_state.get(AUTH_VALIDATED_AT_STATE_KEY, 0) or 0)
         if int(time.time()) - last_validated >= AUTH_SESSION_VALIDATE_INTERVAL_SECONDS:
             user = client.get_user(session.access_token)
             session = session.with_user(user)
             store_auth_session(session)
+            should_sync_profile = True
+
+        cached_profile = st.session_state.get("current_profile")
+        if (
+            not should_sync_profile
+            and cached_profile
+            and str(cached_profile.get("id")) == str(session.user.get("id"))
+        ):
+            return session, cached_profile
 
         profile = ensure_profile(session.user)
         st.session_state.current_profile = profile
@@ -412,6 +443,7 @@ def render_public_submission_page(profile):
                 )
                 if updated_profile:
                     st.session_state.current_profile = updated_profile
+                    clear_profile_caches()
                     profile = updated_profile
             except Exception as exc:
                 st.session_state.user_submission_result = {"success": False, "errors": [str(exc)]}
@@ -431,6 +463,7 @@ def render_public_submission_page(profile):
             "contato_envio": contato,
             "created_by": profile.get("id"),
         }, require_authenticated=True, enforce_monthly_limit=True, enforce_rate_limit=True)
+        clear_profile_caches()
         st.session_state.user_submission_result = result
         st.rerun()
 
@@ -666,18 +699,18 @@ def trainer_avatar(name, place):
     """
 
 
-def inject_css(dark_mode):
+def inject_css():
     palette = {
-        "bg": "#0c1117" if dark_mode else "#f4f6f8",
-        "bg2": "#111a21" if dark_mode else "#eef3f1",
-        "card": "rgba(19, 27, 36, 0.86)" if dark_mode else "rgba(255, 255, 255, 0.92)",
-        "card2": "rgba(25, 38, 47, 0.72)" if dark_mode else "rgba(244, 248, 247, 0.92)",
-        "card3": "rgba(9, 14, 20, 0.66)" if dark_mode else "rgba(255, 255, 255, 0.78)",
-        "border": "rgba(125, 220, 205, 0.24)" if dark_mode else "rgba(27, 85, 82, 0.18)",
-        "border2": "rgba(226, 184, 79, 0.28)" if dark_mode else "rgba(178, 124, 38, 0.24)",
-        "line": "rgba(177, 207, 219, 0.12)" if dark_mode else "rgba(39, 64, 73, 0.12)",
-        "text": "#eef6f8" if dark_mode else "#17242b",
-        "muted": "#a9bdc7" if dark_mode else "#526870",
+        "bg": "#0c1117",
+        "bg2": "#111a21",
+        "card": "rgba(19, 27, 36, 0.86)",
+        "card2": "rgba(25, 38, 47, 0.72)",
+        "card3": "rgba(9, 14, 20, 0.66)",
+        "border": "rgba(125, 220, 205, 0.24)",
+        "border2": "rgba(226, 184, 79, 0.28)",
+        "line": "rgba(177, 207, 219, 0.12)",
+        "text": "#eef6f8",
+        "muted": "#a9bdc7",
         "gold": "#e2b84f",
         "green": "#4cc9b0",
         "terra": "#d47b63",
@@ -716,6 +749,22 @@ def inject_css(dark_mode):
         color: var(--rb-text);
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: linear-gradient(140deg, var(--rb-bg), var(--rb-bg-2) 54%, #071016);
+        color-scheme: dark;
+    }}
+
+    [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarContent"] {{
+        color: var(--rb-text) !important;
+        background-color: transparent !important;
+    }}
+
+    [data-testid="stSidebar"] {{
+        background:
+            linear-gradient(180deg, rgba(13,20,27,0.96), rgba(7,16,22,0.98)) !important;
+        border-right: 1px solid var(--rb-line);
     }}
 
     .block-container {{
@@ -813,11 +862,6 @@ def inject_css(dark_mode):
         color: var(--rb-gold);
         background: rgba(226, 184, 79, 0.10);
         transform: translateY(-1px);
-    }}
-
-    .st-key-theme_toggle {{
-        display: flex;
-        justify-content: flex-end;
     }}
 
     .hero {{
@@ -1924,6 +1968,332 @@ def inject_css(dark_mode):
         line-height: 1.52;
     }}
 
+    .sidebar-profile {{
+        display: flex;
+        align-items: center;
+        gap: 0.72rem;
+        margin: 0.2rem 0 1rem;
+        padding: 0.85rem;
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-md);
+        background: rgba(255,255,255,0.035);
+    }}
+
+    .sidebar-avatar {{
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--rb-radius-md);
+        color: #111008;
+        font-weight: 950;
+        background: linear-gradient(145deg, #f0cc67, #a9832d);
+    }}
+
+    .sidebar-name {{
+        color: var(--rb-text);
+        font-weight: 900;
+        line-height: 1.1;
+        word-break: break-word;
+    }}
+
+    .sidebar-plan {{
+        margin-top: 0.18rem;
+        color: var(--rb-green);
+        font-size: 0.75rem;
+        font-weight: 820;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }}
+
+    .skeleton-grid {{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-bottom: 0.9rem;
+    }}
+
+    .skeleton-card {{
+        min-height: 118px;
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-md);
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.035), rgba(76,201,176,0.10), rgba(255,255,255,0.035));
+        background-size: 220% 100%;
+        animation: rb-shimmer 1.25s ease-in-out infinite;
+    }}
+
+    @keyframes rb-shimmer {{
+        0% {{ background-position: 120% 0; }}
+        100% {{ background-position: -120% 0; }}
+    }}
+
+    .profile-hero-modern,
+    .premium-hero-modern {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+        gap: clamp(1rem, 3vw, 2rem);
+        align-items: center;
+        margin-bottom: 1rem;
+        padding: clamp(1rem, 2.5vw, 1.5rem);
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-lg);
+        background:
+            radial-gradient(circle at 12% 5%, rgba(76,201,176,0.13), transparent 20rem),
+            linear-gradient(150deg, rgba(19,27,36,0.92), rgba(9,14,20,0.72));
+        box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+    }}
+
+    .profile-identity {{
+        display: flex;
+        align-items: center;
+        gap: clamp(0.9rem, 2vw, 1.35rem);
+        min-width: 0;
+    }}
+
+    .profile-avatar {{
+        width: clamp(92px, 15vw, 132px);
+        height: clamp(92px, 15vw, 132px);
+        flex: 0 0 auto;
+    }}
+
+    .profile-avatar svg {{
+        width: 100%;
+        height: 100%;
+        display: block;
+    }}
+
+    .profile-name {{
+        margin: 0.55rem 0 0.22rem;
+        color: var(--rb-text);
+        font-size: clamp(2rem, 5vw, 3.4rem);
+        line-height: 0.98;
+        font-weight: 950;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+    }}
+
+    .profile-location,
+    .profile-meta,
+    .plan-progress-foot {{
+        color: var(--rb-muted);
+    }}
+
+    .profile-meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: 0.7rem;
+    }}
+
+    .profile-meta span {{
+        border: 1px solid var(--rb-line);
+        border-radius: 999px;
+        padding: 0.32rem 0.55rem;
+        background: rgba(255,255,255,0.035);
+        color: var(--rb-text);
+        font-size: 0.78rem;
+        font-weight: 780;
+    }}
+
+    .plan-progress,
+    .premium-price-card,
+    .premium-panel,
+    .saas-readiness {{
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-md);
+        padding: 1rem;
+        background: linear-gradient(150deg, rgba(19,27,36,0.74), rgba(9,14,20,0.48));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }}
+
+    .plan-progress-top {{
+        display: flex;
+        justify-content: space-between;
+        gap: 0.8rem;
+        color: var(--rb-text);
+        font-weight: 900;
+    }}
+
+    .progress-track {{
+        height: 10px;
+        margin: 0.75rem 0 0.55rem;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.07);
+    }}
+
+    .progress-fill {{
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--rb-green), var(--rb-gold));
+        box-shadow: 0 0 24px rgba(76,201,176,0.28);
+        transition: width 360ms ease;
+    }}
+
+    .achievement-grid {{
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+        margin-top: 0.8rem;
+    }}
+
+    .achievement-card {{
+        display: flex;
+        gap: 0.62rem;
+        align-items: center;
+        min-height: 76px;
+        border: 1px solid var(--rb-line);
+        border-radius: var(--rb-radius-md);
+        padding: 0.72rem;
+        background: rgba(255,255,255,0.035);
+    }}
+
+    .achievement-badge {{
+        width: 38px;
+        height: 38px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        color: #111008;
+        font-size: 0.72rem;
+        font-weight: 950;
+        background: linear-gradient(145deg, var(--rb-gold), var(--rb-green));
+    }}
+
+    .achievement-title {{
+        color: var(--rb-text);
+        font-weight: 900;
+    }}
+
+    .achievement-copy {{
+        margin-top: 0.18rem;
+        color: var(--rb-muted);
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }}
+
+    .activity-list {{
+        display: grid;
+        gap: 0.55rem;
+        margin-top: 0.8rem;
+    }}
+
+    .activity-row {{
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr);
+        gap: 0.3rem 0.65rem;
+        align-items: center;
+        border: 1px solid var(--rb-line);
+        border-radius: var(--rb-radius-md);
+        padding: 0.68rem;
+        background: rgba(255,255,255,0.035);
+    }}
+
+    .activity-row span {{
+        color: var(--rb-green);
+        font-size: 0.78rem;
+        font-weight: 850;
+    }}
+
+    .activity-row strong {{
+        color: var(--rb-text);
+        overflow-wrap: anywhere;
+    }}
+
+    .activity-row em {{
+        grid-column: 2;
+        color: var(--rb-muted);
+        font-style: normal;
+        font-size: 0.82rem;
+    }}
+
+    .empty-state.compact {{
+        padding: 0.85rem;
+        min-height: auto;
+    }}
+
+    .premium-price {{
+        margin: 0.45rem 0;
+        color: var(--rb-text);
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1;
+        font-weight: 950;
+    }}
+
+    .pricing-grid {{
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }}
+
+    .pricing-card {{
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-lg);
+        padding: clamp(1rem, 2.4vw, 1.35rem);
+        background: linear-gradient(150deg, rgba(19,27,36,0.80), rgba(9,14,20,0.56));
+    }}
+
+    .pricing-card.highlighted {{
+        border-color: rgba(226,184,79,0.46);
+        background:
+            radial-gradient(circle at 18% 0%, rgba(226,184,79,0.15), transparent 18rem),
+            linear-gradient(150deg, rgba(28,34,30,0.88), rgba(9,14,20,0.62));
+        box-shadow: 0 22px 64px rgba(0,0,0,0.24), 0 0 42px rgba(226,184,79,0.08);
+    }}
+
+    .pricing-kicker {{
+        color: var(--rb-green);
+        font-size: 0.76rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }}
+
+    .pricing-title {{
+        margin-top: 0.42rem;
+        color: var(--rb-text);
+        font-size: 1.7rem;
+        font-weight: 950;
+    }}
+
+    .pricing-limit {{
+        margin: 0.38rem 0 0.9rem;
+        color: var(--rb-gold);
+        font-weight: 920;
+    }}
+
+    .pricing-card ul {{
+        margin: 0;
+        padding-left: 1.1rem;
+        color: var(--rb-muted);
+        line-height: 1.72;
+    }}
+
+    .pricing-card li::marker {{
+        color: var(--rb-green);
+    }}
+
+    .readiness-grid {{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.55rem;
+        margin-top: 0.75rem;
+    }}
+
+    .readiness-grid span {{
+        border: 1px solid var(--rb-line);
+        border-radius: 999px;
+        padding: 0.5rem 0.7rem;
+        color: var(--rb-text);
+        background: rgba(255,255,255,0.035);
+        font-size: 0.82rem;
+        font-weight: 820;
+        text-align: center;
+    }}
+
     .st-key-public_submission_shell,
     .st-key-profile_edit_shell,
     .st-key-session_shell,
@@ -2123,6 +2493,16 @@ def inject_css(dark_mode):
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }}
 
+        .profile-hero-modern,
+        .premium-hero-modern,
+        .pricing-grid {{
+            grid-template-columns: 1fr;
+        }}
+
+        .readiness-grid {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }}
+
         .st-key-filters_panel [data-testid="stHorizontalBlock"],
         .st-key-chart_panel [data-testid="stHorizontalBlock"],
         .st-key-states_section [data-testid="stHorizontalBlock"],
@@ -2173,8 +2553,33 @@ def inject_css(dark_mode):
         }}
 
         .profile-metric-grid,
-        .premium-grid {{
+        .premium-grid,
+        .achievement-grid,
+        .readiness-grid,
+        .skeleton-grid {{
             grid-template-columns: 1fr;
+        }}
+
+        .profile-identity {{
+            align-items: flex-start;
+        }}
+
+        .profile-avatar {{
+            width: 76px;
+            height: 76px;
+        }}
+
+        .profile-meta span {{
+            width: 100%;
+            text-align: center;
+        }}
+
+        .activity-row {{
+            grid-template-columns: 1fr;
+        }}
+
+        .activity-row em {{
+            grid-column: auto;
         }}
 
         .auth-page {{
@@ -2314,29 +2719,48 @@ def section_header(kicker, title, copy=None):
 
 def render_navbar():
     with st.container(key="navbar"):
-        left, right = st.columns([0.78, 0.22], vertical_alignment="center")
-        with left:
-            ui_html("""
-                <div class="nav-shell">
-                    <div class="brand">
-                        <div class="brand-orb">BR</div>
-                        <div>
-                            <div class="brand-name">Ranking BR</div>
-                            <div class="brand-sub">Pokémon GO · Brasil</div>
-                        </div>
+        ui_html("""
+            <div class="nav-shell">
+                <div class="brand">
+                    <div class="brand-orb">BR</div>
+                    <div>
+                        <div class="brand-name">Ranking BR</div>
+                        <div class="brand-sub">Pokémon GO · Brasil</div>
                     </div>
-                    <nav class="nav-menu">
-                        <a href="#dashboard">Dashboard</a>
-                        <a href="#rankings">Rankings</a>
-                        <a href="#estados">Estados</a>
-                        <a href="#jogadores">Jogadores</a>
-                        <a href="#sobre">Sobre</a>
-                    </nav>
                 </div>
-            """)
-        with right:
-            with st.container(key="theme_toggle"):
-                st.toggle("Tema escuro", key="dark_theme", label_visibility="collapsed")
+                <nav class="nav-menu">
+                    <a href="#dashboard">Dashboard</a>
+                    <a href="#rankings">Rankings</a>
+                    <a href="#estados">Estados</a>
+                    <a href="#jogadores">Jogadores</a>
+                    <a href="#sobre">Sobre</a>
+                </nav>
+            </div>
+        """)
+
+
+def render_sidebar(profile, page_options, default_page):
+    plan = "Premium" if profile.get("is_premium") else "Free"
+    nickname = escape(str(profile.get("nickname") or profile.get("email") or "Treinador"))
+    st.sidebar.markdown(
+        f"""
+        <div class="sidebar-profile">
+            <div class="sidebar-avatar">BR</div>
+            <div>
+                <div class="sidebar-name">{nickname}</div>
+                <div class="sidebar-plan">{plan}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    current = st.sidebar.radio(
+        "Navegacao",
+        page_options,
+        index=page_options.index(default_page),
+    )
+    st.sidebar.caption("Tema escuro fixo · PokéGO Brasil")
+    return current
 
 
 def render_hero(base, historical_data):
@@ -2461,6 +2885,13 @@ def render_selected_chips(players):
     ui_html(f'<div class="selected-chips">{chips}</div>')
 
 
+def downsample_timeseries(data, max_points=220):
+    if len(data) <= max_points:
+        return data
+    indexes = np.linspace(0, len(data) - 1, max_points).round().astype(int)
+    return data.iloc[sorted(set(indexes))]
+
+
 def render_chart(data, player_options, default_players):
     with st.container(key="chart_panel"):
         controls_left, controls_right = st.columns([0.68, 0.32], vertical_alignment="bottom")
@@ -2476,7 +2907,7 @@ def render_chart(data, player_options, default_players):
             period = st.segmented_control(
                 "Período",
                 ["7d", "30d", "90d", "1a", "3a", "Tudo"],
-                default="Tudo",
+                default="1a",
                 selection_mode="single",
             )
 
@@ -2492,7 +2923,8 @@ def render_chart(data, player_options, default_players):
         fig = go.Figure()
         for index, player in enumerate(selected_players):
             df_player = plot_data[plot_data["nickname"] == player].sort_values("date")
-            fig.add_trace(go.Scatter(
+            df_player = downsample_timeseries(df_player)
+            fig.add_trace(go.Scattergl(
                 x=df_player["date"],
                 y=df_player["catches"],
                 mode="lines+markers",
@@ -2504,7 +2936,7 @@ def render_chart(data, player_options, default_players):
 
         fig.update_layout(
             template="plotly_dark",
-            height=500,
+            height=460,
             margin=dict(l=10, r=10, t=34, b=8),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(16,17,12,0.28)",
@@ -2515,7 +2947,7 @@ def render_chart(data, player_options, default_players):
             yaxis=dict(showgrid=True, gridcolor="rgba(240,218,159,0.08)", zeroline=False, tickformat=","),
             hoverlabel=dict(bgcolor="#241b13", bordercolor="#e2b84f", font_size=13),
         )
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True})
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 
 def table_html(data):
@@ -2697,6 +3129,115 @@ def format_datetime_value(value):
         return pd.to_datetime(value).strftime("%d/%m/%Y %H:%M")
     except Exception:
         return str(value)
+
+
+def format_date_value(value):
+    if value in (None, ""):
+        return "-"
+    try:
+        return pd.to_datetime(value).strftime("%d/%m/%Y")
+    except Exception:
+        return str(value)
+
+
+def format_signed_compact(value):
+    value = float(value or 0)
+    prefix = "+" if value > 0 else ""
+    return f"{prefix}{format_compact(value)}"
+
+
+def calculate_activity_streak(history):
+    if not history:
+        return 0
+    dates = sorted({
+        pd.to_datetime(row.get("created_at")).date()
+        for row in history
+        if row.get("created_at") not in (None, "")
+    }, reverse=True)
+    if not dates:
+        return 0
+    streak = 1
+    previous = dates[0]
+    for current in dates[1:]:
+        if (previous - current).days == 1:
+            streak += 1
+            previous = current
+            continue
+        if (previous - current).days > 1:
+            break
+    return streak
+
+
+def build_profile_insights(profile, stats, history, entitlement, dashboard_data):
+    nickname = str(profile.get("nickname") or "").strip()
+    state = str(profile.get("estado") or "").strip().upper()
+    insights = {
+        "rank": "-",
+        "latest_catches": 0,
+        "monthly_delta": 0,
+        "daily_average": 0,
+        "activity_streak": calculate_activity_streak(history),
+        "progress_pct": 0,
+        "medals": [],
+        "activities": history[:5] if history else [],
+    }
+
+    if entitlement.monthly_limit:
+        insights["progress_pct"] = min(100, round((entitlement.used_this_month / entitlement.monthly_limit) * 100))
+
+    player_rows = pd.DataFrame()
+    if nickname and dashboard_data is not None and not dashboard_data.empty:
+        candidates = dashboard_data[dashboard_data["nickname"].astype(str).str.lower() == nickname.lower()]
+        if state:
+            state_candidates = candidates[candidates["state"].astype(str).str.upper() == state]
+            if not state_candidates.empty:
+                candidates = state_candidates
+        player_rows = candidates.sort_values("date")
+
+        if not player_rows.empty:
+            latest = player_rows.iloc[-1]
+            insights["latest_catches"] = int(latest.get("catches") or 0)
+
+            base = get_best_catches(dashboard_data)
+            ranked = base.reset_index(drop=True)
+            matched = ranked[ranked["nickname"].astype(str).str.lower() == nickname.lower()]
+            if state:
+                state_matched = matched[matched["state"].astype(str).str.upper() == state]
+                if not state_matched.empty:
+                    matched = state_matched
+            if not matched.empty:
+                insights["rank"] = f"#{int(matched.index[0]) + 1}"
+
+            max_date = player_rows["date"].max()
+            current_window = player_rows[player_rows["date"] >= max_date - pd.Timedelta(days=30)]
+            previous_window = player_rows[
+                (player_rows["date"] < max_date - pd.Timedelta(days=30))
+                & (player_rows["date"] >= max_date - pd.Timedelta(days=60))
+            ]
+            if len(current_window) >= 2:
+                insights["monthly_delta"] = int(current_window["catches"].iloc[-1] - current_window["catches"].iloc[0])
+            elif not previous_window.empty:
+                insights["monthly_delta"] = int(player_rows["catches"].iloc[-1] - previous_window["catches"].iloc[-1])
+
+            if len(player_rows) >= 2:
+                days = max(1, int((player_rows["date"].iloc[-1] - player_rows["date"].iloc[0]).days))
+                insights["daily_average"] = max(0, int((player_rows["catches"].iloc[-1] - player_rows["catches"].iloc[0]) / days))
+
+    medals = []
+    if bool(profile.get("is_premium")):
+        medals.append(("Premium", "Assinatura ativa"))
+    if profile_has_location(profile):
+        medals.append(("Perfil completo", "Localidade registrada"))
+    if int(stats.get("aprovados") or 0) > 0:
+        medals.append(("Validado", "Registro aprovado"))
+    if int(stats.get("total") or 0) >= 10:
+        medals.append(("Consistente", "10+ inputs enviados"))
+    if insights["rank"] != "-" and int(str(insights["rank"]).replace("#", "")) <= 10:
+        medals.append(("Top 10", "Entre os líderes nacionais"))
+    if insights["activity_streak"] >= 3:
+        medals.append(("Streak", f"{insights['activity_streak']} dias de atividade"))
+    insights["medals"] = medals[:6] or [("Primeiro passo", "Envie seu primeiro registro")]
+    return insights
 
 
 def curation_status_label(status: str) -> str:
@@ -2895,7 +3436,7 @@ def render_curation_page(profile):
 
 def render_profile_page(profile, session: AuthSession):
     try:
-        overview = get_profile_overview(profile["id"])
+        overview = get_profile_overview_cached(profile["id"], str(profile.get("updated_at") or ""))
     except Exception as exc:
         st.error(f"Nao foi possivel carregar o perfil. Verifique as migrations do Supabase: {exc}")
         return
@@ -2906,23 +3447,97 @@ def render_profile_page(profile, session: AuthSession):
     history = overview["history"]
     is_premium = bool(profile.get("is_premium"))
     premium_label = "Premium" if is_premium else "Free"
+    dashboard_snapshot = pd.DataFrame()
+    if profile.get("nickname"):
+        try:
+            dashboard_snapshot = get_data(get_data_fingerprint_cached())
+        except Exception:
+            dashboard_snapshot = pd.DataFrame()
+    insights = build_profile_insights(profile, stats, history, entitlement, dashboard_snapshot)
+    avatar = trainer_avatar(profile.get("nickname") or profile.get("email") or "BR", 1)
+    location = " · ".join(
+        item for item in [
+            str(profile.get("cidade") or "").strip(),
+            str(profile.get("estado") or "").strip(),
+            str(profile.get("pais") or "").strip(),
+        ]
+        if item
+    ) or "Localidade pendente"
+    used = entitlement.used_this_month
+    limit = entitlement.monthly_limit
+    remaining = entitlement.remaining_this_month
+    progress_pct = insights["progress_pct"]
+    medals_html = "".join(
+        f"""
+        <article class="achievement-card">
+            <div class="achievement-badge">{escape(title[:2].upper())}</div>
+            <div>
+                <div class="achievement-title">{escape(title)}</div>
+                <div class="achievement-copy">{escape(copy)}</div>
+            </div>
+        </article>
+        """
+        for title, copy in insights["medals"]
+    )
+    activity_html = "".join(
+        f"""
+        <div class="activity-row">
+            <span>{format_date_value(row.get("created_at"))}</span>
+            <strong>{escape(str(row.get("nickname") or profile.get("nickname") or "-"))}</strong>
+            <em>{format_int(row.get("catches") or 0)} capturas · {curation_status_label(row.get("status"))}</em>
+        </div>
+        """
+        for row in insights["activities"]
+    ) or '<div class="empty-state compact">Nenhuma atividade recente.</div>'
 
     ui_html(f"""
-        <section class="page-hero profile-hero">
-            <div class="eyebrow">Conta</div>
-            <h1 class="page-title">Perfil</h1>
-            <p class="page-copy">
-                Gerencie seus dados, acompanhe seus envios e veja o status da curadoria.
-            </p>
+        <section class="profile-hero-modern">
+            <div class="profile-identity">
+                <div class="profile-avatar">{avatar}</div>
+                <div>
+                    <div class="eyebrow">Conta competitiva</div>
+                    <h1 class="profile-name">{escape(str(profile.get("nickname") or "Treinador"))}</h1>
+                    <div class="profile-location">{escape(location)}</div>
+                    <div class="profile-meta">
+                        <span>Entrada {format_date_value(profile.get("created_at"))}</span>
+                        <span>{escape(premium_label)}</span>
+                        <span>{escape(insights["rank"])}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="plan-progress">
+                <div class="plan-progress-top">
+                    <span>Uso mensal</span>
+                    <strong>{used}/{limit}</strong>
+                </div>
+                <div class="progress-track"><div class="progress-fill" style="width:{progress_pct}%"></div></div>
+                <div class="plan-progress-foot">{remaining} inputs restantes no plano atual</div>
+            </div>
         </section>
         <div class="profile-metric-grid">
             <article class="profile-metric">
-                <div class="profile-metric-label">Plano</div>
-                <div class="profile-metric-value">{escape(premium_label)}</div>
+                <div class="profile-metric-label">Capturas registradas</div>
+                <div class="profile-metric-value">{format_compact(insights["latest_catches"])}</div>
             </article>
             <article class="profile-metric">
-                <div class="profile-metric-label">Inputs restantes</div>
-                <div class="profile-metric-value">{entitlement.remaining_this_month}/{entitlement.monthly_limit}</div>
+                <div class="profile-metric-label">Ranking atual</div>
+                <div class="profile-metric-value">{escape(insights["rank"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Evolução mensal</div>
+                <div class="profile-metric-value">{format_signed_compact(insights["monthly_delta"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Média diária</div>
+                <div class="profile-metric-value">{format_compact(insights["daily_average"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Inputs enviados</div>
+                <div class="profile-metric-value">{format_int(stats.get("total", 0))}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Streak</div>
+                <div class="profile-metric-value">{format_int(insights["activity_streak"])}d</div>
             </article>
             <article class="profile-metric">
                 <div class="profile-metric-label">Aprovados</div>
@@ -2935,10 +3550,27 @@ def render_profile_page(profile, session: AuthSession):
         </div>
     """)
 
-    tab_names = ["Resumo", "Enviar dados", "Historico", "Sessao"]
+    tab_names = ["Resumo", "Editar perfil", "Enviar dados", "Historico", "Sessao"]
     tabs = st.tabs(tab_names)
 
     with tabs[0]:
+        left, right = st.columns([0.52, 0.48], vertical_alignment="top")
+        with left:
+            ui_html(f"""
+                <div class="premium-panel">
+                    <div class="premium-card-label">Conquistas</div>
+                    <div class="achievement-grid">{medals_html}</div>
+                </div>
+            """)
+        with right:
+            ui_html(f"""
+                <div class="premium-panel">
+                    <div class="premium-card-label">Últimas atividades</div>
+                    <div class="activity-list">{activity_html}</div>
+                </div>
+            """)
+
+    with tabs[1]:
         left, right = st.columns([0.52, 0.48], vertical_alignment="top")
         with left:
             with st.container(key="profile_edit_shell"):
@@ -2969,6 +3601,7 @@ def render_profile_page(profile, session: AuthSession):
                         )
                         if updated:
                             st.session_state.current_profile = updated
+                            clear_profile_caches()
                         st.success("Perfil atualizado.")
                     except Exception:
                         st.error("Nao foi possivel atualizar o perfil agora.")
@@ -2981,10 +3614,10 @@ def render_profile_page(profile, session: AuthSession):
             st.write(f"Ultimo acesso: {format_datetime_value(profile.get('last_seen_at') or profile.get('last_login_at'))}")
             st.write(f"Total de inputs enviados: {format_int(stats.get('total', 0))}")
 
-    with tabs[1]:
+    with tabs[2]:
         render_public_submission_page(profile)
 
-    with tabs[2]:
+    with tabs[3]:
         if history:
             history_df = pd.DataFrame(history)
             visible_columns = [
@@ -3009,7 +3642,7 @@ def render_profile_page(profile, session: AuthSession):
         else:
             ui_html('<div class="empty-state">Nenhum envio encontrado para sua conta.</div>')
 
-    with tabs[3]:
+    with tabs[4]:
         with st.container(key="session_shell"):
             left, right = st.columns([0.62, 0.38], vertical_alignment="center")
             with left:
@@ -3022,49 +3655,89 @@ def render_profile_page(profile, session: AuthSession):
 
 def render_premium_page(profile):
     is_premium = bool(profile.get("is_premium"))
-    ui_html("""
-        <section class="page-hero premium-hero">
-            <div class="eyebrow">Premium</div>
-            <h1 class="page-title">Plano Premium</h1>
-            <p class="page-copy">
-                Mais capacidade de envio, prioridade de evolucao do produto e base preparada
-                para novos recursos avancados.
-            </p>
+    free_limit = int(get_setting("FREE_MONTHLY_INPUT_LIMIT", "5") or 5)
+    premium_limit = int(get_setting("PREMIUM_MONTHLY_INPUT_LIMIT", "50") or 50)
+    price_cents = int(get_setting("PREMIUM_PRICE_CENTS", "1990") or 1990)
+    currency = get_setting("PREMIUM_CURRENCY", "BRL") or "BRL"
+    price_label = f"{currency} {price_cents / 100:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    current_provider = get_setting("PAYMENT_PROVIDER", "manual") or "manual"
+    premium_features = [
+        "10x mais inputs mensais",
+        "Todas estatísticas do jogo",
+        "Metas personalizadas",
+        "Análise histórica",
+        "Métricas avançadas",
+        "Sistema de medalhas",
+        "Evolução por categoria",
+        "Comparações temporais",
+        "Insights automáticos",
+        "Painel premium exclusivo",
+        "Funcionalidades antecipadas",
+    ]
+    feature_html = "".join(f"<li>{escape(item)}</li>" for item in premium_features)
+    status_label = "Premium ativo" if is_premium else "Pronto para upgrade"
+
+    ui_html(f"""
+        <section class="premium-hero-modern">
+            <div>
+                <div class="eyebrow">Assinatura PokéGO Brasil</div>
+                <h1 class="page-title">Premium para quem acompanha evolução de verdade</h1>
+                <p class="page-copy">
+                    Uma camada SaaS para transformar registros em metas, estatísticas pessoais,
+                    comparações históricas e retenção competitiva.
+                </p>
+            </div>
+            <div class="premium-price-card">
+                <div class="premium-card-label">{escape(status_label)}</div>
+                <div class="premium-price">{escape(price_label)}</div>
+                <div class="premium-card-copy">Plano mensal previsto. Ativação por webhook após confirmação do provedor.</div>
+            </div>
         </section>
+        <div class="pricing-grid">
+            <article class="pricing-card">
+                <div class="pricing-kicker">Free</div>
+                <div class="pricing-title">Essencial</div>
+                <div class="pricing-limit">{free_limit} inputs/mês</div>
+                <ul>
+                    <li>Limite mensal básico</li>
+                    <li>Apenas capturas</li>
+                    <li>Dashboard global</li>
+                    <li>Histórico pessoal essencial</li>
+                </ul>
+            </article>
+            <article class="pricing-card highlighted">
+                <div class="pricing-kicker">Premium</div>
+                <div class="pricing-title">Competitivo</div>
+                <div class="pricing-limit">{premium_limit} inputs/mês</div>
+                <ul>{feature_html}</ul>
+            </article>
+        </div>
         <div class="premium-grid">
             <article class="premium-card">
-                <div class="premium-card-label">Mais envios</div>
-                <div class="premium-card-title">Limite ampliado</div>
-                <div class="premium-card-copy">Estrutura pronta para liberar mais inputs mensais e recursos exclusivos.</div>
+                <div class="premium-card-label">Retenção</div>
+                <div class="premium-card-title">Metas e progresso</div>
+                <div class="premium-card-copy">Barras, streaks, medalhas e objetivos mensais para criar hábito de atualização.</div>
             </article>
             <article class="premium-card">
-                <div class="premium-card-label">Curadoria</div>
-                <div class="premium-card-title">Historico completo</div>
-                <div class="premium-card-copy">Acompanhe status, datas, observacoes e revisoes dos seus registros.</div>
+                <div class="premium-card-label">Análise</div>
+                <div class="premium-card-title">Histórico rico</div>
+                <div class="premium-card-copy">Comparações por período, categoria e evolução individual conforme novas métricas entrarem.</div>
             </article>
             <article class="premium-card">
-                <div class="premium-card-label">Futuro</div>
-                <div class="premium-card-title">Recursos avancados</div>
-                <div class="premium-card-copy">Base preparada para alertas, analises pessoais e validacao automatica.</div>
+                <div class="premium-card-label">SaaS</div>
+                <div class="premium-card-title">Assinatura real</div>
+                <div class="premium-card-copy">Checkout externo, pagamentos, webhook, status premium e limites por plano já estão separados por camada.</div>
             </article>
         </div>
     """)
-
-    comparison = pd.DataFrame([
-        {"Recurso": "Inputs mensais", "Free": "5", "Premium": "ampliado"},
-        {"Recurso": "Dashboard global", "Free": "incluido", "Premium": "incluido"},
-        {"Recurso": "Historico pessoal", "Free": "incluido", "Premium": "incluido"},
-        {"Recurso": "Funcionalidades futuras", "Free": "limitadas", "Premium": "prioridade"},
-    ])
-    st.dataframe(comparison, hide_index=True, use_container_width=True)
 
     with st.container(key="premium_cta_shell"):
         if is_premium:
             st.success("Seu plano Premium esta ativo.")
         else:
-            st.markdown("#### Upgrade")
-            st.write("O pagamento acontece em checkout externo. A liberacao premium ocorre por webhook assim que o provedor confirmar o pagamento.")
-            if st.button("Fazer upgrade", type="primary", key="premium_upgrade_button"):
+            st.markdown("#### Ativar Premium")
+            st.write("O checkout usa o provedor configurado e a liberacao premium ocorre por webhook assinado.")
+            if st.button("Fazer upgrade para Premium", type="primary", key="premium_upgrade_button"):
                 try:
                     checkout = create_upgrade_checkout(profile)
                     st.session_state.last_checkout = {
@@ -3083,16 +3756,22 @@ def render_premium_page(profile):
                     st.info("Checkout externo ainda nao configurado. Defina PAYMENT_CHECKOUT_URL e o provedor desejado.")
                 st.caption(f"Referencia: {checkout.get('reference')} | Provedor: {checkout.get('provider')}")
 
-    with st.expander("FAQ"):
-        st.write("Como a conta vira Premium? O provedor envia um webhook assinado para a camada de pagamento, que marca o pagamento como pago e ativa o usuario.")
-        st.write("Quanto tempo leva? A liberacao deve ocorrer em ate 5-10 minutos depois da confirmacao do provedor.")
-        st.write("Quais provedores estao previstos? Cacto, PagSeguro e Stripe por adapters modulares.")
+    ui_html(f"""
+        <div class="saas-readiness">
+            <div class="premium-card-label">Arquitetura pronta</div>
+            <div class="readiness-grid">
+                <span>Provider atual: {escape(current_provider)}</span>
+                <span>Cakto/Cacto adapter</span>
+                <span>Webhook assinado</span>
+                <span>Ativação premium</span>
+                <span>Limite por plano</span>
+                <span>Upgrade/downgrade por status</span>
+            </div>
+        </div>
+    """)
 
 
-if "dark_theme" not in st.session_state:
-    st.session_state.dark_theme = True
-
-inject_css(st.session_state.dark_theme)
+inject_css()
 session, profile = require_authenticated_user()
 page_param = str(st.query_params.get("page", "")).strip().lower()
 page_options = ["Dashboard", "Perfil", "Premium"]
@@ -3108,12 +3787,7 @@ elif page_param in {"curadoria", "admin"} and "Curadoria" in page_options:
 else:
     default_page = "Dashboard"
 
-current_page = st.sidebar.radio(
-    "Pagina",
-    page_options,
-    index=page_options.index(default_page),
-)
-st.sidebar.caption(f"{profile.get('email', '')} | {'Premium' if profile.get('is_premium') else 'Free'}")
+current_page = render_sidebar(profile, page_options, default_page)
 
 render_navbar()
 
@@ -3132,9 +3806,20 @@ if current_page == "Curadoria":
     render_footer()
     st.stop()
 
+dashboard_placeholder = st.empty()
+with dashboard_placeholder.container():
+    ui_html("""
+        <div class="skeleton-grid">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+        </div>
+    """)
 with st.spinner("Carregando ranking..."):
-    df = get_data(get_data_source_fingerprint())
+    fingerprint = get_data_fingerprint_cached()
+    df = get_data(fingerprint)
     base_all = get_best_catches(df)
+dashboard_placeholder.empty()
 
 render_hero(base_all, df)
 
