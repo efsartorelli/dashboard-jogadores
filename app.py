@@ -2929,7 +2929,7 @@ def render_chart(data, player_options, default_players):
                 y=df_player["catches"],
                 mode="lines+markers",
                 name=player,
-                line=dict(width=3, color=colors[index % len(colors)], shape="spline"),
+                line=dict(width=3, color=colors[index % len(colors)]),
                 marker=dict(size=6, line=dict(width=1.3, color="rgba(255,255,255,0.38)")),
                 hovertemplate="<b>%{fullData.name}</b><br>%{x|%d/%m/%Y}<br>%{y:,.0f} capturas<extra></extra>",
             ))
