@@ -8,11 +8,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.auth import AuthError, AuthSession, get_auth_client
-from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, get_setting, validate_required_settings
+from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, SUPABASE_AUTH_REDIRECT_URL, get_setting, validate_required_settings
 from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
-from src.metrics.formatting import format_compact, format_int, initials
+from src.metrics.formatting import format_compact, format_int
 from src.metrics.rankings import build_general_ranking as compute_general_ranking
 from src.metrics.rankings import get_best_catches as compute_best_catches
 from src.metrics.states import build_state_stats as compute_state_stats
@@ -211,7 +211,7 @@ def render_auth_page():
 
     # Supabase envia emails de confirmacao/recuperacao. O SMTP profissional
     # deve ser configurado no painel do Supabase, nao em codigo Streamlit.
-    email_redirect_to = get_setting("SUPABASE_AUTH_REDIRECT_URL")
+    email_redirect_to = SUPABASE_AUTH_REDIRECT_URL
 
     feedback = st.session_state.pop("auth_feedback", None)
     if feedback:
@@ -666,35 +666,63 @@ def trainer_avatar(name, place):
         3: ("#b06b4f", "#e2b84f", "#2c1f1a"),
     }
     cap_color, jacket_color, shadow_color = accents.get(place, accents[2])
-    badge = escape(initials(name)[:1])
 
     return f"""
         <svg class="trainer-avatar-svg" viewBox="0 0 120 120" role="img" aria-label="Avatar de treinador">
             <defs>
                 <radialGradient id="trainer-glow-{place}" cx="50%" cy="28%" r="70%">
-                    <stop offset="0%" stop-color="rgba(255,255,255,0.30)" />
-                    <stop offset="52%" stop-color="rgba(226,184,79,0.14)" />
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.32)" />
+                    <stop offset="46%" stop-color="rgba(226,184,79,0.18)" />
                     <stop offset="100%" stop-color="rgba(15,16,8,0)" />
                 </radialGradient>
-                <linearGradient id="trainer-jacket-{place}" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="{jacket_color}" />
+                <linearGradient id="trainer-avatar-fill-{place}" x1="20%" y1="6%" x2="84%" y2="100%">
+                    <stop offset="0%" stop-color="{cap_color}" />
+                    <stop offset="52%" stop-color="{jacket_color}" />
                     <stop offset="100%" stop-color="{shadow_color}" />
                 </linearGradient>
+                <linearGradient id="trainer-avatar-stroke-{place}" x1="18%" y1="0%" x2="82%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.82)" />
+                    <stop offset="48%" stop-color="rgba(226,184,79,0.72)" />
+                    <stop offset="100%" stop-color="rgba(76,201,176,0.52)" />
+                </linearGradient>
+                <filter id="trainer-soft-glow-{place}" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="3.2" result="blur" />
+                    <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
             </defs>
             <circle cx="60" cy="60" r="58" fill="url(#trainer-glow-{place})" />
-            <path d="M26 105c5-21 18-32 34-32s29 11 34 32" fill="url(#trainer-jacket-{place})" />
-            <path d="M40 97c4-11 11-17 20-17s16 6 20 17" fill="rgba(10,11,8,0.34)" />
-            <circle cx="60" cy="54" r="21" fill="#d8b18b" />
-            <path d="M39 55c2-15 11-24 25-24 11 0 19 7 22 19-9-5-18-7-29-6-8 1-14 4-18 11z" fill="#201912" />
-            <path d="M31 43c12-15 39-20 61-4-14 1-30 4-47 11-5 2-10 0-14-7z" fill="{cap_color}" />
-            <path d="M76 44c10 0 19 3 27 8-10 2-21 1-31-2z" fill="{cap_color}" opacity="0.78" />
-            <circle cx="60" cy="40" r="8" fill="rgba(15,16,8,0.32)" />
-            <circle cx="60" cy="40" r="5" fill="rgba(240,239,255,0.86)" />
-            <text x="60" y="43" text-anchor="middle" font-size="7" font-weight="900" fill="#171207">{badge}</text>
-            <path d="M50 59h.01M70 59h.01" stroke="#18140f" stroke-width="4" stroke-linecap="round" />
-            <path d="M54 68c4 2.6 8 2.6 12 0" fill="none" stroke="#7b4638" stroke-width="2.4" stroke-linecap="round" />
-            <path d="M43 82l17 14 17-14" fill="none" stroke="rgba(240,239,255,0.58)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M35 105h50" stroke="rgba(226,184,79,0.46)" stroke-width="3" stroke-linecap="round" />
+            <circle cx="60" cy="45" r="19" fill="rgba(8,13,18,0.64)" />
+            <circle cx="60" cy="45" r="17" fill="url(#trainer-avatar-fill-{place})" filter="url(#trainer-soft-glow-{place})" />
+            <path
+                d="M29 100c3.5-22 16.5-34 31-34s27.5 12 31 34"
+                fill="rgba(8,13,18,0.66)"
+            />
+            <path
+                d="M34 99c4.3-18.8 15.5-29.2 26-29.2S81.7 80.2 86 99"
+                fill="url(#trainer-avatar-fill-{place})"
+                filter="url(#trainer-soft-glow-{place})"
+            />
+            <circle
+                cx="60"
+                cy="45"
+                r="18.5"
+                fill="none"
+                stroke="url(#trainer-avatar-stroke-{place})"
+                stroke-width="2.4"
+            />
+            <path
+                d="M35 99c4.3-18.8 15.2-29 25-29s20.7 10.2 25 29"
+                fill="none"
+                stroke="url(#trainer-avatar-stroke-{place})"
+                stroke-width="2.6"
+                stroke-linecap="round"
+            />
+            <path d="M48 43h.01M72 43h.01" stroke="rgba(255,255,255,0.72)" stroke-width="3.4" stroke-linecap="round" />
+            <path d="M52 54c4.8 3.4 11.2 3.4 16 0" fill="none" stroke="rgba(255,255,255,0.54)" stroke-width="2.8" stroke-linecap="round" />
+            <path d="M42 88h36" stroke="rgba(255,255,255,0.22)" stroke-width="2.4" stroke-linecap="round" />
         </svg>
     """
 
@@ -1014,26 +1042,54 @@ def inject_css():
         position: relative;
         z-index: 1;
         color: var(--rb-gold);
-        width: 48px;
-        height: 48px;
-        margin-bottom: 0.92rem;
+        width: 54px;
+        height: 54px;
+        margin-bottom: 1rem;
         display: grid;
         place-items: center;
-        border-radius: 18px;
-        border: 1px solid rgba(226,184,79,0.20);
-        background: rgba(226,184,79,0.075);
-        box-shadow: 0 12px 34px rgba(226,184,79,0.10), inset 0 1px 0 rgba(255,255,255,0.08);
+        border-radius: 20px;
+        border: 1px solid rgba(226,184,79,0.28);
+        background:
+            radial-gradient(circle at 38% 24%, rgba(255,255,255,0.16), transparent 32%),
+            linear-gradient(145deg, rgba(226,184,79,0.15), rgba(76,201,176,0.07));
+        box-shadow:
+            0 14px 34px rgba(226,184,79,0.13),
+            0 0 28px rgba(76,201,176,0.08),
+            inset 0 1px 0 rgba(255,255,255,0.12);
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
+    }}
+
+    .stat-icon::after {{
+        content: "";
+        position: absolute;
+        inset: 9px;
+        border-radius: 16px;
+        background: rgba(7,16,22,0.34);
+        border: 1px solid rgba(255,255,255,0.045);
     }}
 
     .stat-icon svg {{
-        width: 27px;
-        height: 27px;
+        position: relative;
+        z-index: 1;
+        width: 30px;
+        height: 30px;
         display: block;
         stroke: currentColor;
         fill: none;
-        stroke-width: 1.9;
+        stroke-width: 1.75;
         stroke-linecap: round;
         stroke-linejoin: round;
+        filter: drop-shadow(0 0 10px rgba(226,184,79,0.20));
+    }}
+
+    .stat-card:hover .stat-icon {{
+        transform: translateY(-2px) scale(1.035);
+        color: #f0ce6b;
+        border-color: rgba(226,184,79,0.48);
+        box-shadow:
+            0 18px 44px rgba(226,184,79,0.18),
+            0 0 36px rgba(76,201,176,0.13),
+            inset 0 1px 0 rgba(255,255,255,0.16);
     }}
 
     .stat-label {{
@@ -1206,20 +1262,24 @@ def inject_css():
         display: grid;
         place-items: center;
         border-radius: 50%;
-        border: 3px solid rgba(226,184,79,0.65);
+        border: 3px solid rgba(226,184,79,0.68);
         background:
             radial-gradient(circle at 42% 18%, rgba(255,255,255,0.26), transparent 28%),
-            linear-gradient(145deg, rgba(143,167,255,0.42), rgba(226,184,79,0.24) 48%, rgba(127,163,90,0.28));
-        box-shadow: 0 16px 42px rgba(0,0,0,0.34), 0 0 24px rgba(226,184,79,0.13), inset 0 1px 0 rgba(255,255,255,0.18);
+            linear-gradient(145deg, rgba(143,167,255,0.30), rgba(226,184,79,0.22) 48%, rgba(76,201,176,0.18));
+        box-shadow:
+            0 16px 42px rgba(0,0,0,0.34),
+            0 0 26px rgba(226,184,79,0.16),
+            inset 0 1px 0 rgba(255,255,255,0.18);
         overflow: hidden;
         position: relative;
         z-index: 1;
     }}
 
     .podium-avatar svg {{
-        width: 100%;
-        height: 100%;
+        width: 92%;
+        height: 92%;
         display: block;
+        filter: drop-shadow(0 0 16px rgba(226,184,79,0.14));
     }}
 
     .champion .podium-avatar {{
@@ -2788,10 +2848,11 @@ def render_hero(base, historical_data):
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                <path d="M16 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H7.4A4.4 4.4 0 0 0 3 19.4V21" />
+                                <circle cx="9.5" cy="7.4" r="3.7" />
+                                <path d="M21 21v-1.4a3.8 3.8 0 0 0-3.1-3.7" />
+                                <path d="M16.2 4.1a3.55 3.55 0 0 1 0 6.8" />
+                                <path d="M4.8 19.5h9.4" />
                             </svg>
                         </div>
                         <div class="stat-label">Jogadores monitorados</div>
@@ -2800,12 +2861,13 @@ def render_hero(base, historical_data):
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="9" />
-                                <circle cx="12" cy="12" r="4" />
-                                <path d="M12 3v3" />
-                                <path d="M12 18v3" />
-                                <path d="M3 12h3" />
-                                <path d="M18 12h3" />
+                                <path d="M4 19V5" />
+                                <path d="M4 19h16" />
+                                <path d="M8 15v-4" />
+                                <path d="M12 15V8" />
+                                <path d="M16 15v-6" />
+                                <path d="M7.2 7.7 10 5l3 2 4-4" />
+                                <path d="M16.7 3H20v3.3" />
                             </svg>
                         </div>
                         <div class="stat-label">Capturas analisadas</div>
@@ -2814,10 +2876,10 @@ def render_hero(base, historical_data):
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24">
-                                <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z" />
-                                <path d="M9 4v13" />
-                                <path d="M15 7v13" />
-                                <circle cx="17" cy="8" r="1.8" />
+                                <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11z" />
+                                <circle cx="12" cy="10" r="2.35" />
+                                <path d="M4.5 20.2c1.5-1 3.2-1.5 5.1-1.5" />
+                                <path d="M14.4 18.7c1.9 0 3.6.5 5.1 1.5" />
                             </svg>
                         </div>
                         <div class="stat-label">Estados representados</div>

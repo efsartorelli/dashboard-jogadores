@@ -39,7 +39,7 @@ DATABASE_URL=
 DATA_SOURCE=database
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
-SUPABASE_AUTH_REDIRECT_URL=
+SUPABASE_AUTH_REDIRECT_URL=https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app
 ```
 
 Para testar exatamente o mesmo mecanismo usado no Streamlit Cloud, voce tambem
@@ -51,7 +51,7 @@ Modelo minimo:
 ```toml
 SUPABASE_URL = ""
 SUPABASE_ANON_KEY = ""
-SUPABASE_AUTH_REDIRECT_URL = ""
+SUPABASE_AUTH_REDIRECT_URL = "https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app"
 DATABASE_URL = ""
 
 PAYMENT_PROVIDER = "manual"
@@ -82,7 +82,7 @@ DATA_SOURCE = "database"
 
 SUPABASE_URL = ""
 SUPABASE_ANON_KEY = ""
-SUPABASE_AUTH_REDIRECT_URL = ""
+SUPABASE_AUTH_REDIRECT_URL = "https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app"
 
 FREE_MONTHLY_INPUT_LIMIT = "5"
 PREMIUM_MONTHLY_INPUT_LIMIT = "50"
@@ -148,6 +148,11 @@ No Supabase, configure `Authentication` > `URL Configuration` com a URL final
 do Streamlit Cloud em `Site URL` e tambem em `Redirect URLs`. Use o mesmo valor
 em `SUPABASE_AUTH_REDIRECT_URL` para links de confirmacao/recuperacao enviados
 pelo Supabase Auth.
+
+URL oficial de producao:
+`https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app`.
+Se algum secret local ou variavel antiga apontar para uma URL de desenvolvimento,
+o app ignora esse valor para redirects de Auth e usa a URL oficial acima.
 
 Para envio de email de confirmacao/recuperacao, configure `Authentication` >
 `SMTP Settings` com o seu provedor, como o email profissional da HostGator. Se

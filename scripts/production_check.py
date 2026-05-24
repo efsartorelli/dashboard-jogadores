@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+PRODUCTION_APP_URL = "https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app"
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
@@ -68,7 +69,7 @@ def env_example_is_safe() -> bool:
         "DATA_SOURCE": "database",
         "SUPABASE_URL": "",
         "SUPABASE_ANON_KEY": "",
-        "SUPABASE_AUTH_REDIRECT_URL": "",
+        "SUPABASE_AUTH_REDIRECT_URL": PRODUCTION_APP_URL,
         "FREE_MONTHLY_INPUT_LIMIT": "5",
         "PREMIUM_MONTHLY_INPUT_LIMIT": "50",
         "AUTH_SESSION_REFRESH_MARGIN_SECONDS": "120",
@@ -114,7 +115,7 @@ def streamlit_secrets_example_is_safe() -> bool:
     required_values = {
         "SUPABASE_URL": "",
         "SUPABASE_ANON_KEY": "",
-        "SUPABASE_AUTH_REDIRECT_URL": "",
+        "SUPABASE_AUTH_REDIRECT_URL": PRODUCTION_APP_URL,
         "DATABASE_URL": "",
         "PAYMENT_PROVIDER": "manual",
         "PAYMENT_WEBHOOK_SECRET": "",

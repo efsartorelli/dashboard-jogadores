@@ -15,6 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / "data"
 DEFAULT_EXCEL_PATH = DATA_DIR / "nofullautoinsidebuildings.xlsx"
 DOTENV_PATH = ROOT_DIR / ".env"
+PRODUCTION_APP_URL = "https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app"
 
 
 def _load_local_dotenv() -> None:
@@ -76,6 +77,28 @@ def get_bool_setting(key: str, default: bool = False) -> bool:
     return value in {"1", "true", "yes", "y", "on"}
 
 
+def _is_local_url(value: str | None) -> bool:
+    normalized = (value or "").strip().lower()
+    return (
+        "localhost" in normalized
+        or "127.0.0.1" in normalized
+        or normalized.startswith("http://0.0.0.0")
+    )
+
+
+def get_auth_redirect_url() -> str:
+    configured = get_setting("SUPABASE_AUTH_REDIRECT_URL")
+    if configured and not _is_local_url(configured):
+        return configured.rstrip("/")
+
+    for legacy_key in ("SITE_URL", "APP_URL", "STREAMLIT_APP_URL", "NEXT_PUBLIC_SITE_URL"):
+        legacy_value = get_setting(legacy_key)
+        if legacy_value and not _is_local_url(legacy_value):
+            return legacy_value.rstrip("/")
+
+    return PRODUCTION_APP_URL
+
+
 @dataclass(frozen=True)
 class SettingsValidation:
     missing: tuple[str, ...]
@@ -115,7 +138,7 @@ DATA_SOURCE = (get_setting("DATA_SOURCE", "auto") or "auto").strip().lower()
 DATABASE_URL = get_setting("DATABASE_URL")
 SUPABASE_URL = get_setting("SUPABASE_URL")
 SUPABASE_ANON_KEY = get_setting("SUPABASE_ANON_KEY")
-SUPABASE_AUTH_REDIRECT_URL = get_setting("SUPABASE_AUTH_REDIRECT_URL")
+SUPABASE_AUTH_REDIRECT_URL = get_auth_redirect_url()
 
 AUTH_SESSION_REFRESH_MARGIN_SECONDS = get_int_setting("AUTH_SESSION_REFRESH_MARGIN_SECONDS", 120)
 AUTH_SESSION_VALIDATE_INTERVAL_SECONDS = get_int_setting("AUTH_SESSION_VALIDATE_INTERVAL_SECONDS", 300)
