@@ -97,7 +97,7 @@ class ProfileValidationTest(unittest.TestCase):
                 "updated_at": "2026-05-02",
             }
         ]
-        with patch("src.services.users.listar_perfis_publicos_usuario", return_value=public_rows):
+        with patch("src.database.repositories.listar_perfis_publicos_usuario", return_value=public_rows):
             profiles = get_public_profile_index(conn=conn)
 
         self.assertIn("kendo4687", profiles)

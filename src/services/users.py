@@ -12,7 +12,6 @@ from src.database.repositories import (
     buscar_usuario_por_id,
     contar_inputs_usuario_mes,
     estatisticas_inputs_usuario,
-    listar_perfis_publicos_usuario,
     listar_inputs_usuario,
     listar_pagamentos_usuario,
     tocar_ultimo_acesso_usuario,
@@ -253,6 +252,8 @@ def get_public_profile_index(conn=None) -> dict[str, dict[str, Any]]:
     if owns_connection:
         conn = context.__enter__()
     try:
+        from src.database.repositories import listar_perfis_publicos_usuario
+
         profiles: dict[str, dict[str, Any]] = {}
         for profile in listar_perfis_publicos_usuario(conn):
             key = normalize_nickname_match_key(profile.get("nickname"))
