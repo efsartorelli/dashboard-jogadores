@@ -1660,6 +1660,14 @@ def inject_css():
         gap: 0.38rem;
     }}
 
+    .mobile-ranking-heading {{
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.48rem;
+        flex-wrap: wrap;
+    }}
+
     .mobile-ranking-player,
     .mobile-ranking-player:visited {{
         width: fit-content;
@@ -1680,6 +1688,25 @@ def inject_css():
 
     .mobile-ranking-player.available:hover {{
         color: var(--rb-gold);
+    }}
+
+    .mobile-ranking-state {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        min-height: 24px;
+        padding: 0.22rem 0.48rem;
+        border: 1px solid rgba(127,163,90,0.22);
+        border-radius: 999px;
+        color: var(--rb-green);
+        background: rgba(127,163,90,0.11);
+        font-size: 0.68rem;
+        font-weight: 920;
+        line-height: 1;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        overflow-wrap: anywhere;
     }}
 
     .mobile-ranking-meta {{
@@ -3925,8 +3952,11 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
             <article class="mobile-ranking-card{top_class}">
                 <div class="mobile-ranking-rank">#{rank}</div>
                 <div class="mobile-ranking-body">
-                    {player_html}
-                    <div class="mobile-ranking-meta"><span>{escape(state)}</span><span>{escape(metric_label)}</span></div>
+                    <div class="mobile-ranking-heading">
+                        {player_html}
+                        <span class="mobile-ranking-state">{escape(state)}</span>
+                    </div>
+                    <div class="mobile-ranking-meta"><span>{escape(metric_label)}</span></div>
                     <div class="mobile-ranking-metric">{escape(metric_value)}</div>
                     <div class="mobile-ranking-sub">{escape(sub_text)}</div>
                     {extra_html}
