@@ -1670,6 +1670,10 @@ def inject_css():
         box-shadow: 0 14px 34px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
     }}
 
+    .mobile-ranking-card.has-profile {{
+        padding-bottom: 2.95rem;
+    }}
+
     .mobile-ranking-card.top-3 {{
         border-color: rgba(226,184,79,0.38);
         box-shadow: 0 18px 44px rgba(0,0,0,0.22), 0 0 26px rgba(226,184,79,0.08);
@@ -3525,11 +3529,19 @@ def inject_css():
             align-items: flex-start;
         }}
 
+        [class*="st-key-ranking_general_mobile_card_item_"],
+        [class*="st-key-ranking_average_mobile_card_item_"] {{
+            position: relative;
+            width: 100%;
+        }}
+
         [class*="st-key-ranking_general_mobile_profile_action_"],
         [class*="st-key-ranking_average_mobile_profile_action_"] {{
             display: block;
-            margin: -0.54rem 0 0.9rem;
-            padding: 0 0.8rem;
+            position: relative;
+            z-index: 8;
+            margin: -2.65rem 0 1.05rem;
+            padding: 0 1.05rem;
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton,
@@ -3541,18 +3553,19 @@ def inject_css():
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button,
         [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button {{
             width: auto !important;
-            min-width: 86px;
-            max-width: 120px;
-            min-height: 36px;
-            padding: 0.34rem 0.72rem;
+            min-width: 72px;
+            max-width: 92px;
+            min-height: 32px;
+            padding: 0.26rem 0.62rem;
             border-radius: 999px;
             border-color: rgba(244,201,93,0.18);
-            background: rgba(244,201,93,0.055);
+            background: rgba(10,16,20,0.88);
             color: rgba(246,241,213,0.92);
-            font-size: 0.72rem;
+            font-size: 0.68rem;
             font-weight: 900;
             letter-spacing: 0.06em;
             text-transform: uppercase;
+            box-shadow: 0 10px 22px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.06);
         }}
 
         .st-key-ranking_general_panel,
@@ -4418,6 +4431,7 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
         state = str(row.get("Estado") or row.get("state") or "-").strip() or "-"
         has_profile = normalize_nickname_match_key(nickname) in public_profile_index
         top_class = " top-3" if rank <= 3 else ""
+        profile_class = " has-profile" if has_profile else ""
 
         if "Capturas" in row:
             metric_label = "capturas"
@@ -4447,7 +4461,7 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
         extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
         ui_html(f"""
             <div class="mobile-ranking-cards">
-                <article class="mobile-ranking-card{top_class}">
+                <article class="mobile-ranking-card{top_class}{profile_class}">
                     <div class="mobile-ranking-rank">#{rank}</div>
                     <div class="mobile-ranking-body">
                         <div class="mobile-ranking-heading">
