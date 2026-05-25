@@ -2,6 +2,7 @@ from html import escape
 from datetime import date
 import os
 import time
+from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -1604,6 +1605,117 @@ def inject_css():
         background: rgba(8,8,6,0.16);
     }}
 
+    .mobile-ranking-cards {{
+        display: none;
+    }}
+
+    .mobile-ranking-card {{
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.9rem;
+        width: 100%;
+        margin-top: 0.72rem;
+        padding: 0.92rem;
+        border: 1px solid rgba(226,184,79,0.18);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 88% 0%, rgba(127,163,90,0.12), transparent 8rem),
+            linear-gradient(155deg, rgba(30,28,20,0.82), rgba(10,13,14,0.62));
+        box-shadow: 0 14px 34px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
+    }}
+
+    .mobile-ranking-card.top-3 {{
+        border-color: rgba(226,184,79,0.38);
+        box-shadow: 0 18px 44px rgba(0,0,0,0.22), 0 0 26px rgba(226,184,79,0.08);
+    }}
+
+    .mobile-ranking-rank {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        height: 44px;
+        padding: 0 0.62rem;
+        border-radius: 999px;
+        color: var(--rb-gold);
+        border: 1px solid rgba(226,184,79,0.26);
+        background: rgba(226,184,79,0.11);
+        font-size: 0.95rem;
+        font-weight: 950;
+        line-height: 1;
+    }}
+
+    .mobile-ranking-card.top-3 .mobile-ranking-rank {{
+        color: #171207;
+        background: linear-gradient(145deg, #f2cf70, var(--rb-gold));
+        box-shadow: 0 0 20px rgba(226,184,79,0.18);
+    }}
+
+    .mobile-ranking-body {{
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.38rem;
+    }}
+
+    .mobile-ranking-player,
+    .mobile-ranking-player:visited {{
+        width: fit-content;
+        max-width: 100%;
+        color: var(--rb-text);
+        font-size: 1.08rem;
+        font-weight: 930;
+        line-height: 1.16;
+        text-decoration: none;
+        overflow-wrap: anywhere;
+    }}
+
+    .mobile-ranking-player.available {{
+        color: #f6f1d5;
+        border-bottom: 1px solid rgba(244,201,93,0.42);
+        text-shadow: 0 0 14px rgba(244,201,93,0.12);
+    }}
+
+    .mobile-ranking-player.available:hover {{
+        color: var(--rb-gold);
+    }}
+
+    .mobile-ranking-meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.42rem;
+        align-items: center;
+        color: var(--rb-muted);
+        font-size: 0.76rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }}
+
+    .mobile-ranking-metric {{
+        color: var(--rb-gold);
+        font-size: 1.18rem;
+        font-weight: 950;
+        line-height: 1.05;
+        overflow-wrap: anywhere;
+    }}
+
+    .mobile-ranking-sub {{
+        color: rgba(240,218,159,0.74);
+        font-size: 0.82rem;
+        font-weight: 760;
+        line-height: 1.35;
+    }}
+
+    .mobile-ranking-extra {{
+        color: rgba(220,231,231,0.66);
+        font-size: 0.74rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }}
+
     .rb-table {{
         width: 100%;
         min-width: 620px;
@@ -3012,6 +3124,17 @@ def inject_css():
             padding-left: 0.85rem;
             padding-right: 0.85rem;
             padding-top: 4.1rem !important;
+            max-width: 100% !important;
+            overflow-x: hidden;
+        }}
+
+        html,
+        body,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"],
+        [data-testid="stMainBlockContainer"] {{
+            max-width: 100%;
+            overflow-x: hidden;
         }}
 
         .nav-shell {{
@@ -3046,15 +3169,38 @@ def inject_css():
             grid-template-columns: 1fr;
         }}
 
+        .st-key-ranking_general_desktop_table,
+        .st-key-ranking_average_desktop_table {{
+            display: none !important;
+        }}
+
+        .mobile-ranking-cards {{
+            display: block;
+            width: 100%;
+        }}
+
+        .mobile-ranking-card:first-child {{
+            margin-top: 0.2rem;
+        }}
+
+        .mobile-ranking-card {{
+            grid-template-columns: auto minmax(0, 1fr);
+            align-items: flex-start;
+        }}
+
+        .st-key-ranking_general_panel,
+        .st-key-ranking_average_panel {{
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }}
+
         .rb-table-wrap {{
-            margin-inline: -0.25rem;
-            border-radius: var(--rb-radius-md);
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior-x: contain;
+            display: none;
         }}
 
         .rb-table {{
-            min-width: 540px;
+            min-width: 0;
             font-size: 0.74rem;
         }}
 
@@ -3067,6 +3213,12 @@ def inject_css():
             min-height: 46px;
             font-size: 0.76rem;
             padding: 0.45rem 0.35rem;
+        }}
+
+        .st-key-ranking_general_pagination [data-testid="stHorizontalBlock"],
+        .st-key-ranking_average_pagination [data-testid="stHorizontalBlock"],
+        .st-key-curation_pagination [data-testid="stHorizontalBlock"] {{
+            gap: 0.45rem;
         }}
 
         .stButton > button {{
@@ -3092,7 +3244,9 @@ def inject_css():
         }}
 
         .js-plotly-plot,
-        .plot-container {{
+        .plot-container,
+        .plotly,
+        .svg-container {{
             max-width: 100%;
             overflow: hidden;
         }}
@@ -3148,7 +3302,7 @@ def inject_css():
         }}
 
         .capture-medal-grid {{
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }}
 
         .capture-medal-card {{
@@ -3213,7 +3367,6 @@ def inject_css():
         .profile-metric-grid,
         .premium-grid,
         .achievement-grid,
-        .capture-medal-grid,
         .readiness-grid,
         .skeleton-grid {{
             grid-template-columns: 1fr;
@@ -3340,7 +3493,7 @@ def inject_css():
         }}
 
         .rb-table {{
-            min-width: 500px;
+            min-width: 0;
             font-size: 0.72rem;
         }}
 
@@ -3377,6 +3530,7 @@ def inject_css():
         }}
 
         .state-metrics {{
+            grid-template-columns: 1fr;
             gap: 0.44rem;
         }}
 
@@ -3727,6 +3881,62 @@ def table_html(data):
     """
 
 
+def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
+    if data.empty:
+        ui_html('<div class="mobile-ranking-cards"><div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div></div>')
+        return
+
+    cards = []
+    for row_index, (_, row) in enumerate(data.iterrows()):
+        rank = int(row["#"]) if "#" in row else row_index + 1
+        nickname = str(row.get("Jogador") or row.get("nickname") or "").strip()
+        state = str(row.get("Estado") or row.get("state") or "-").strip() or "-"
+        has_profile = normalize_nickname_match_key(nickname) in public_profile_index
+        top_class = " top-3" if rank <= 3 else ""
+
+        if "Capturas" in row:
+            metric_label = "capturas"
+            metric_value = str(row.get("Capturas") or "-")
+            days_value = row.get("Dias ativo")
+            sub_text = f"{int(days_value)} dias ativo" if pd.notna(days_value) else ""
+            extra_text = ""
+        else:
+            metric_label = "média diária"
+            metric_value = str(row.get("Média") or row.get("MÃ©dia") or "-")
+            days_value = row.get("Dias")
+            sub_text = f"{int(days_value)} dias no período" if pd.notna(days_value) else ""
+            period = str(row.get("Período") or row.get("PerÃ­odo") or "").strip()
+            extra_text = period
+
+        if has_profile:
+            href = f'?player={quote(nickname, safe="")}'
+            player_html = (
+                f'<a class="mobile-ranking-player available" href="{href}" '
+                f'title="Abrir perfil público de {escape(nickname)}">{escape(nickname)}</a>'
+            )
+        else:
+            player_html = (
+                f'<span class="mobile-ranking-player" title="Perfil ainda não disponível">'
+                f'{escape(nickname)}</span>'
+            )
+
+        extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
+        cards.append(f"""
+            <article class="mobile-ranking-card{top_class}">
+                <div class="mobile-ranking-rank">#{rank}</div>
+                <div class="mobile-ranking-body">
+                    {player_html}
+                    <div class="mobile-ranking-meta"><span>{escape(state)}</span><span>{escape(metric_label)}</span></div>
+                    <div class="mobile-ranking-metric">{escape(metric_value)}</div>
+                    <div class="mobile-ranking-sub">{escape(sub_text)}</div>
+                    {extra_html}
+                </div>
+            </article>
+        """)
+
+    ui_html(f'<div class="mobile-ranking-cards">{"".join(cards)}</div>')
+
+
 def render_interactive_ranking_table(data, key_prefix, public_profile_index):
     if data.empty:
         ui_html('<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>')
@@ -3811,25 +4021,26 @@ def render_pagination_controls(page_key, page_count, key_prefix):
     current = init_pagination_state(page_key, page_count)
     page_count = max(1, int(page_count or 1))
 
-    prev_col, page_col, next_col = st.columns([0.30, 0.40, 0.30], vertical_alignment="center")
-    with prev_col:
-        st.button(
-            "Anterior",
-            key=f"{key_prefix}_prev",
-            disabled=current <= 0,
-            on_click=change_pagination_page,
-            args=(page_key, page_count, -1),
-        )
-    with page_col:
-        ui_html(f'<div class="page-note">Página {current + 1} de {page_count}</div>')
-    with next_col:
-        st.button(
-            "Próxima",
-            key=f"{key_prefix}_next",
-            disabled=current >= page_count - 1,
-            on_click=change_pagination_page,
-            args=(page_key, page_count, 1),
-        )
+    with st.container(key=f"{key_prefix}_pagination"):
+        prev_col, page_col, next_col = st.columns([0.30, 0.40, 0.30], vertical_alignment="center")
+        with prev_col:
+            st.button(
+                "Anterior",
+                key=f"{key_prefix}_prev",
+                disabled=current <= 0,
+                on_click=change_pagination_page,
+                args=(page_key, page_count, -1),
+            )
+        with page_col:
+            ui_html(f'<div class="page-note">Página {current + 1} de {page_count}</div>')
+        with next_col:
+            st.button(
+                "Próxima",
+                key=f"{key_prefix}_next",
+                disabled=current >= page_count - 1,
+                on_click=change_pagination_page,
+                args=(page_key, page_count, 1),
+            )
     return current
 
 
@@ -3852,7 +4063,9 @@ def render_paginated_table(title, data, key, public_profile_index=None):
     start = current_page_index * page_size
     page = data.iloc[start:start + page_size]
     if public_profile_index is not None:
-        render_interactive_ranking_table(page, key, public_profile_index)
+        with st.container(key=f"{key}_desktop_table"):
+            render_interactive_ranking_table(page, key, public_profile_index)
+        render_mobile_ranking_cards(page, key, public_profile_index)
     else:
         ui_html(table_html(page))
 
