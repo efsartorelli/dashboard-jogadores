@@ -1,5 +1,6 @@
 from html import escape
 from datetime import date
+import os
 import time
 
 import numpy as np
@@ -7,8 +8,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import src.config as app_config
 from src.auth import AuthError, AuthSession, get_auth_client
-from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, ENABLE_PREMIUM, SUPABASE_AUTH_REDIRECT_URL, get_setting, validate_required_settings
 from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
@@ -38,6 +39,58 @@ from src.services.users import (
 )
 from src.validation.submissions import BRAZILIAN_STATES
 from src.validation.profiles import COUNTRIES, normalize_nickname_match_key, validate_profile_fields
+
+
+PRODUCTION_APP_URL_FALLBACK = "https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app"
+
+
+class FallbackSettingsValidation:
+    def __init__(self, missing):
+        self.missing = tuple(missing)
+
+    @property
+    def ok(self):
+        return not self.missing
+
+    def message(self):
+        if self.ok:
+            return "Configuracao obrigatoria presente."
+        return "Variaveis obrigatorias ausentes: " + ", ".join(self.missing)
+
+
+def fallback_get_setting(key, default=None):
+    try:
+        if key in st.secrets:
+            value = str(st.secrets[key]).strip()
+            if value:
+                return value
+    except Exception:
+        pass
+    value = str(os.getenv(key, "")).strip()
+    return value or default
+
+
+def fallback_validate_required_settings(keys):
+    return FallbackSettingsValidation([key for key in keys if not get_setting(key)])
+
+
+def config_bool(name, default=False):
+    value = getattr(app_config, name, None)
+    if value is None:
+        raw = get_setting(name, str(default).lower())
+        return str(raw or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+get_setting = getattr(app_config, "get_setting", fallback_get_setting)
+validate_required_settings = getattr(app_config, "validate_required_settings", fallback_validate_required_settings)
+AUTH_SESSION_VALIDATE_INTERVAL_SECONDS = int(getattr(app_config, "AUTH_SESSION_VALIDATE_INTERVAL_SECONDS", 300) or 300)
+DATA_SOURCE = str(getattr(app_config, "DATA_SOURCE", "auto") or "auto").strip().lower()
+SUPABASE_AUTH_REDIRECT_URL = str(
+    getattr(app_config, "SUPABASE_AUTH_REDIRECT_URL", PRODUCTION_APP_URL_FALLBACK)
+    or PRODUCTION_APP_URL_FALLBACK
+).rstrip("/")
+ENABLE_PREMIUM = config_bool("ENABLE_PREMIUM", False)
 
 
 st.set_page_config(
