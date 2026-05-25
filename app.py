@@ -1793,12 +1793,16 @@ def inject_css():
     }}
 
     [class*="st-key-ranking_general_mobile_profile_action_"],
-    [class*="st-key-ranking_average_mobile_profile_action_"] {{
+    [class*="st-key-ranking_average_mobile_profile_action_"],
+    [class*="st-key-ranking-general-mobile-profile-action-"],
+    [class*="st-key-ranking-average-mobile-profile-action-"] {{
         display: none;
     }}
 
     [class*="st-key-ranking_general_mobile_card_item_"],
-    [class*="st-key-ranking_average_mobile_card_item_"] {{
+    [class*="st-key-ranking_average_mobile_card_item_"],
+    [class*="st-key-ranking-general-mobile-card-item-"],
+    [class*="st-key-ranking-average-mobile-card-item-"] {{
         display: none;
     }}
 
@@ -3612,9 +3616,11 @@ def inject_css():
         }}
 
         [class*="st-key-ranking_general_mobile_card_item_"],
-        [class*="st-key-ranking_average_mobile_card_item_"] {{
-            display: block;
-            position: relative;
+        [class*="st-key-ranking_average_mobile_card_item_"],
+        [class*="st-key-ranking-general-mobile-card-item-"],
+        [class*="st-key-ranking-average-mobile-card-item-"] {{
+            display: block !important;
+            position: relative !important;
             width: 100%;
             margin-top: 0.72rem;
             padding: 0.92rem;
@@ -3628,19 +3634,25 @@ def inject_css():
             box-sizing: border-box;
         }}
 
-        [class*="st-key-ranking_general_mobile_card_item_"]:has(.mobile-ranking-card.has-profile),
-        [class*="st-key-ranking_average_mobile_card_item_"]:has(.mobile-ranking-card.has-profile) {{
+        [class*="st-key-ranking_general_mobile_card_item_profile_"],
+        [class*="st-key-ranking_average_mobile_card_item_profile_"],
+        [class*="st-key-ranking-general-mobile-card-item-profile-"],
+        [class*="st-key-ranking-average-mobile-card-item-profile-"] {{
             padding-bottom: 3.2rem;
         }}
 
-        [class*="st-key-ranking_general_mobile_card_item_"]:has(.mobile-ranking-card.top-3),
-        [class*="st-key-ranking_average_mobile_card_item_"]:has(.mobile-ranking-card.top-3) {{
+        [class*="st-key-ranking_general_mobile_card_item_"][class*="_top_"],
+        [class*="st-key-ranking_average_mobile_card_item_"][class*="_top_"],
+        [class*="st-key-ranking-general-mobile-card-item-"][class*="-top-"],
+        [class*="st-key-ranking-average-mobile-card-item-"][class*="-top-"] {{
             border-color: rgba(226,184,79,0.38);
             box-shadow: 0 18px 44px rgba(0,0,0,0.22), 0 0 26px rgba(226,184,79,0.08);
         }}
 
         [class*="st-key-ranking_general_mobile_card_item_"] .mobile-ranking-card,
-        [class*="st-key-ranking_average_mobile_card_item_"] .mobile-ranking-card {{
+        [class*="st-key-ranking_average_mobile_card_item_"] .mobile-ranking-card,
+        [class*="st-key-ranking-general-mobile-card-item-"] .mobile-ranking-card,
+        [class*="st-key-ranking-average-mobile-card-item-"] .mobile-ranking-card {{
             margin: 0;
             padding: 0;
             border: 0;
@@ -3651,16 +3663,20 @@ def inject_css():
         }}
 
         [class*="st-key-ranking_general_mobile_card_item_"] .mobile-ranking-card.has-profile,
-        [class*="st-key-ranking_average_mobile_card_item_"] .mobile-ranking-card.has-profile {{
+        [class*="st-key-ranking_average_mobile_card_item_"] .mobile-ranking-card.has-profile,
+        [class*="st-key-ranking-general-mobile-card-item-"] .mobile-ranking-card.has-profile,
+        [class*="st-key-ranking-average-mobile-card-item-"] .mobile-ranking-card.has-profile {{
             padding-bottom: 0;
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"],
-        [class*="st-key-ranking_average_mobile_profile_action_"] {{
-            display: block;
+        [class*="st-key-ranking_average_mobile_profile_action_"],
+        [class*="st-key-ranking-general-mobile-profile-action-"],
+        [class*="st-key-ranking-average-mobile-profile-action-"] {{
+            display: block !important;
             align-items: center;
             justify-content: center;
-            position: absolute;
+            position: absolute !important;
             right: 1.02rem;
             bottom: 1.08rem;
             z-index: 8;
@@ -3669,13 +3685,17 @@ def inject_css():
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton,
-        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton {{
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton,
+        [class*="st-key-ranking-general-mobile-profile-action-"] .stButton,
+        [class*="st-key-ranking-average-mobile-profile-action-"] .stButton {{
             display: flex;
             justify-content: flex-end;
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button,
-        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button {{
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button,
+        [class*="st-key-ranking-general-mobile-profile-action-"] .stButton > button,
+        [class*="st-key-ranking-average-mobile-profile-action-"] .stButton > button {{
             width: auto !important;
             min-width: 72px;
             max-width: 92px;
@@ -3694,7 +3714,9 @@ def inject_css():
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button:hover,
-        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button:hover {{
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button:hover,
+        [class*="st-key-ranking-general-mobile-profile-action-"] .stButton > button:hover,
+        [class*="st-key-ranking-average-mobile-profile-action-"] .stButton > button:hover {{
             color: #171207;
             border-color: rgba(244,201,93,0.62) !important;
             background: linear-gradient(145deg, rgba(244,201,93,0.95), rgba(127,163,90,0.8)) !important;
@@ -4564,6 +4586,8 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
         has_profile = normalize_nickname_match_key(nickname) in public_profile_index
         top_class = " top-3" if rank <= 3 else ""
         profile_class = " has-profile" if has_profile else ""
+        profile_key_part = "profile" if has_profile else "plain"
+        tier_key_part = "top" if rank <= 3 else "standard"
 
         if "Capturas" in row:
             metric_label = "capturas"
@@ -4591,7 +4615,7 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
             )
 
         extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
-        with st.container(key=f"{key_prefix}_mobile_card_item_{row_index}"):
+        with st.container(key=f"{key_prefix}_mobile_card_item_{profile_key_part}_{tier_key_part}_{row_index}"):
             ui_html(f"""
             <div class="mobile-ranking-cards">
                 <article class="player-card mobile-ranking-card{top_class}{profile_class}">
