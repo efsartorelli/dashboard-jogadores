@@ -3538,10 +3538,12 @@ def inject_css():
         [class*="st-key-ranking_general_mobile_profile_action_"],
         [class*="st-key-ranking_average_mobile_profile_action_"] {{
             display: block;
-            position: relative;
+            position: absolute;
+            right: 1.02rem;
+            bottom: 1.08rem;
             z-index: 8;
-            margin: -2.65rem 0 1.05rem;
-            padding: 0 1.05rem;
+            margin: 0;
+            padding: 0;
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton,
@@ -4459,7 +4461,8 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
             )
 
         extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
-        ui_html(f"""
+        with st.container(key=f"{key_prefix}_mobile_card_item_{row_index}"):
+            ui_html(f"""
             <div class="mobile-ranking-cards">
                 <article class="mobile-ranking-card{top_class}{profile_class}">
                     <div class="mobile-ranking-rank">#{rank}</div>
@@ -4476,15 +4479,15 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
                 </article>
             </div>
         """)
-        if has_profile:
-            with st.container(key=f"{key_prefix}_mobile_profile_action_{row_index}"):
-                st.button(
-                    "Perfil",
-                    key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
-                    help=f"Abrir perfil público de {nickname}",
-                    on_click=open_player_profile,
-                    args=(nickname,),
-                )
+            if has_profile:
+                with st.container(key=f"{key_prefix}_mobile_profile_action_{row_index}"):
+                    st.button(
+                        "Perfil",
+                        key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
+                        help=f"Abrir perfil público de {nickname}",
+                        on_click=open_player_profile,
+                        args=(nickname,),
+                    )
 
 
 def render_interactive_ranking_table(data, key_prefix, public_profile_index):
