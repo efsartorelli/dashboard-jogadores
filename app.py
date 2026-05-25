@@ -2,7 +2,6 @@ from html import escape
 from datetime import date
 import os
 import time
-from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -1743,6 +1742,11 @@ def inject_css():
         overflow-wrap: anywhere;
     }}
 
+    [class*="st-key-ranking_general_mobile_profile_action_"],
+    [class*="st-key-ranking_average_mobile_profile_action_"] {{
+        display: none;
+    }}
+
     .desktop-ranking-wrap {{
         width: 100%;
         overflow: hidden;
@@ -3476,6 +3480,25 @@ def inject_css():
             align-items: flex-start;
         }}
 
+        [class*="st-key-ranking_general_mobile_profile_action_"],
+        [class*="st-key-ranking_average_mobile_profile_action_"] {{
+            display: block;
+            margin: -0.42rem 0 0.86rem;
+            padding: 0 0.72rem;
+        }}
+
+        [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button,
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button {{
+            min-height: 42px;
+            border-radius: 0 0 16px 16px;
+            border-color: rgba(244,201,93,0.18);
+            background: rgba(244,201,93,0.055);
+            color: rgba(246,241,213,0.92);
+            font-size: 0.76rem;
+            font-weight: 900;
+            letter-spacing: 0.02em;
+        }}
+
         .st-key-ranking_general_panel,
         .st-key-ranking_average_panel {{
             width: 100%;
@@ -4332,7 +4355,6 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
         ui_html('<div class="mobile-ranking-cards"><div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div></div>')
         return
 
-    cards = []
     for row_index, (_, row) in enumerate(data.iterrows()):
         rank = int(row["#"]) if "#" in row else row_index + 1
         nickname = str(row.get("Jogador") or row.get("nickname") or "").strip()
@@ -4355,10 +4377,9 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
             extra_text = period
 
         if has_profile:
-            href = f'?player={quote(nickname, safe="")}'
             player_html = (
-                f'<a class="mobile-ranking-player available" href="{href}" '
-                f'title="Abrir perfil público de {escape(nickname)}">{escape(nickname)}</a>'
+                f'<span class="mobile-ranking-player available" '
+                f'title="Perfil disponível">{escape(nickname)}</span>'
             )
         else:
             player_html = (
@@ -4367,23 +4388,32 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
             )
 
         extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
-        cards.append(f"""
-            <article class="mobile-ranking-card{top_class}">
-                <div class="mobile-ranking-rank">#{rank}</div>
-                <div class="mobile-ranking-body">
-                    <div class="mobile-ranking-heading">
-                        {player_html}
-                        <span class="mobile-ranking-state">{escape(state)}</span>
+        ui_html(f"""
+            <div class="mobile-ranking-cards">
+                <article class="mobile-ranking-card{top_class}">
+                    <div class="mobile-ranking-rank">#{rank}</div>
+                    <div class="mobile-ranking-body">
+                        <div class="mobile-ranking-heading">
+                            {player_html}
+                            <span class="mobile-ranking-state">{escape(state)}</span>
+                        </div>
+                        <div class="mobile-ranking-meta"><span>{escape(metric_label)}</span></div>
+                        <div class="mobile-ranking-metric">{escape(metric_value)}</div>
+                        <div class="mobile-ranking-sub">{escape(sub_text)}</div>
+                        {extra_html}
                     </div>
-                    <div class="mobile-ranking-meta"><span>{escape(metric_label)}</span></div>
-                    <div class="mobile-ranking-metric">{escape(metric_value)}</div>
-                    <div class="mobile-ranking-sub">{escape(sub_text)}</div>
-                    {extra_html}
-                </div>
-            </article>
+                </article>
+            </div>
         """)
-
-    ui_html(f'<div class="mobile-ranking-cards">{"".join(cards)}</div>')
+        if has_profile:
+            with st.container(key=f"{key_prefix}_mobile_profile_action_{row_index}"):
+                st.button(
+                    f"Abrir perfil de {nickname}",
+                    key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
+                    help=f"Abrir perfil público de {nickname}",
+                    on_click=open_player_profile,
+                    args=(nickname,),
+                )
 
 
 def render_interactive_ranking_table(data, key_prefix, public_profile_index):
@@ -4391,91 +4421,54 @@ def render_interactive_ranking_table(data, key_prefix, public_profile_index):
         ui_html('<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>')
         return
 
-    columns = list(data.columns)
-    average_table = any(str(column) in {"Média", "Período"} for column in columns)
+    with st.container(key=f"{key_prefix}_native_table"):
+        columns = list(data.columns)
+        width_map = {
+            "#": 0.10,
+            "Jogador": 0.32,
+            "Estado": 0.15,
+            "Capturas": 0.22,
+            "Dias ativo": 0.21,
+            "Média": 0.16,
+            "Período": 0.22,
+            "Dias": 0.15,
+        }
+        column_widths = [width_map.get(str(column), 0.18) for column in columns]
 
-    def column_class(column):
-        if column == "#":
-            return "rank-column"
-        if column == "Jogador":
-            return "player-column"
-        if column == "Estado":
-            return "state-column"
-        if column in {"Capturas", "Dias ativo", "Média", "Dias"}:
-            return "numeric-column"
-        if column == "Período":
-            return "period-column"
-        return ""
+        header_cols = st.columns(column_widths, vertical_alignment="center")
+        for col, label in zip(header_cols, columns):
+            with col:
+                st.caption(str(label))
 
-    def colgroup_html():
-        if average_table:
-            mapping = {
-                "#": "rank-col",
-                "Jogador": "avg-player-col",
-                "Estado": "avg-state-col",
-                "Média": "avg-metric-col",
-                "Período": "period-col",
-                "Dias": "avg-days-col",
-            }
-        else:
-            mapping = {
-                "#": "rank-col",
-                "Jogador": "player-col",
-                "Estado": "state-col",
-                "Capturas": "metric-col",
-                "Dias ativo": "days-col",
-            }
-        return "".join(f'<col class="{mapping.get(str(column), "metric-col")}">' for column in columns)
-
-    header = "".join(
-        f'<th class="{column_class(str(column))}">{escape(str(column))}</th>'
-        for column in columns
-    )
-
-    rows = []
-    for row_index, (_, row) in enumerate(data.iterrows()):
-        rank = int(row["#"]) if "#" in row else row_index + 1
-        row_class = "top-10" if rank <= 10 else ""
-        cells = []
-        for column in columns:
-            raw_value = row[column]
-            col_class = column_class(str(column))
-            if column == "#":
-                medal_class = " medal" if rank <= 3 else ""
-                value = f'<span class="rank-pill{medal_class}">{rank}</span>'
-            elif column == "Jogador":
-                nickname = str(raw_value or "").strip()
-                if normalize_nickname_match_key(nickname) in public_profile_index:
-                    href = f'?player={quote(nickname, safe="")}'
-                    value = (
-                        f'<a class="desktop-ranking-player available" href="{href}" '
-                        f'title="Abrir perfil público de {escape(nickname)}">{escape(nickname)}</a>'
-                    )
-                else:
-                    value = (
-                        f'<span class="desktop-ranking-player" title="Perfil ainda não disponível">'
-                        f'{escape(nickname)}</span>'
-                    )
-            elif column == "Estado":
-                value = f'<span class="desktop-state-badge">{escape(str(raw_value))}</span>'
-            elif column in {"Capturas", "Dias ativo", "Média", "Dias"}:
-                value = f'<span class="desktop-ranking-value">{escape(str(raw_value))}</span>'
-            elif column == "Período":
-                value = f'<span class="desktop-ranking-period">{escape(str(raw_value))}</span>'
-            else:
-                value = escape(str(raw_value))
-            cells.append(f'<td class="{col_class}">{value}</td>')
-        rows.append(f'<tr class="{row_class}">{"".join(cells)}</tr>')
-
-    ui_html(f"""
-        <div class="desktop-ranking-wrap">
-            <table class="desktop-ranking-table">
-                <colgroup>{colgroup_html()}</colgroup>
-                <thead><tr>{header}</tr></thead>
-                <tbody>{"".join(rows)}</tbody>
-            </table>
-        </div>
-    """)
+        for row_index, (_, row) in enumerate(data.iterrows()):
+            rank = int(row["#"]) if "#" in row else row_index + 1
+            row_cols = st.columns(column_widths, vertical_alignment="center")
+            for col, column in zip(row_cols, columns):
+                raw_value = row[column]
+                with col:
+                    if column == "#":
+                        medal_class = " medal" if rank <= 3 else ""
+                        ui_html(f'<span class="rank-pill{medal_class}">{rank}</span>')
+                    elif column == "Jogador":
+                        nickname = str(raw_value or "").strip()
+                        if normalize_nickname_match_key(nickname) in public_profile_index:
+                            st.button(
+                                nickname,
+                                key=f"{key_prefix}_player_{row_index}_{normalize_nickname_match_key(nickname)}",
+                                help=f"Abrir perfil público de {nickname}",
+                                on_click=open_player_profile,
+                                args=(nickname,),
+                            )
+                        else:
+                            ui_html(f'<span class="desktop-ranking-player" title="Perfil ainda não disponível">{escape(nickname)}</span>')
+                    elif column == "Estado":
+                        ui_html(f'<span class="desktop-state-badge">{escape(str(raw_value))}</span>')
+                    elif column in {"Capturas", "Dias ativo", "Média", "Dias"}:
+                        ui_html(f'<span class="desktop-ranking-value">{escape(str(raw_value))}</span>')
+                    elif column == "Período":
+                        ui_html(f'<span class="desktop-ranking-period">{escape(str(raw_value))}</span>')
+                    else:
+                        st.write(str(raw_value))
 
 
 def clamp_page_index(value, page_count):
