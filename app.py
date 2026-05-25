@@ -1767,10 +1767,50 @@ def inject_css():
         font-variant-numeric: tabular-nums;
     }}
 
+    .desktop-ranking-table col.rank-col {{
+        width: 9%;
+    }}
+
+    .desktop-ranking-table col.player-col {{
+        width: 34%;
+    }}
+
+    .desktop-ranking-table col.state-col {{
+        width: 17%;
+    }}
+
+    .desktop-ranking-table col.metric-col {{
+        width: 22%;
+    }}
+
+    .desktop-ranking-table col.days-col {{
+        width: 18%;
+    }}
+
+    .desktop-ranking-table col.avg-player-col {{
+        width: 30%;
+    }}
+
+    .desktop-ranking-table col.avg-state-col {{
+        width: 15%;
+    }}
+
+    .desktop-ranking-table col.avg-metric-col {{
+        width: 14%;
+    }}
+
+    .desktop-ranking-table col.period-col {{
+        width: 26%;
+    }}
+
+    .desktop-ranking-table col.avg-days-col {{
+        width: 15%;
+    }}
+
     .desktop-ranking-table th {{
-        padding: 0.98rem 0.9rem;
+        padding: 0.98rem 0.75rem;
         color: rgba(220,231,231,0.76);
-        text-align: left;
+        text-align: center;
         font-size: 0.66rem;
         font-weight: 940;
         letter-spacing: 0.13em;
@@ -1787,11 +1827,12 @@ def inject_css():
     }}
 
     .desktop-ranking-table td {{
-        padding: 0.98rem 0.9rem;
+        padding: 0.98rem 0.75rem;
         border-bottom: 1px solid rgba(240,218,159,0.095);
         vertical-align: middle;
         font-size: 0.88rem;
         line-height: 1.34;
+        text-align: center;
     }}
 
     .desktop-ranking-table tr:last-child td {{
@@ -1820,7 +1861,6 @@ def inject_css():
 
     .desktop-ranking-table th.rank-column,
     .desktop-ranking-table td.rank-column {{
-        width: 58px;
         text-align: center;
         padding-left: 0.82rem;
         padding-right: 0.58rem;
@@ -1835,23 +1875,22 @@ def inject_css():
 
     .desktop-ranking-table th.player-column,
     .desktop-ranking-table td.player-column {{
-        width: 34%;
+        text-align: left;
     }}
 
     .desktop-ranking-table th.state-column,
     .desktop-ranking-table td.state-column {{
-        width: 96px;
         text-align: center;
     }}
 
     .desktop-ranking-table th.numeric-column,
     .desktop-ranking-table td.numeric-column {{
-        text-align: right;
+        text-align: center;
     }}
 
     .desktop-ranking-table th.period-column,
     .desktop-ranking-table td.period-column {{
-        width: 22%;
+        text-align: center;
     }}
 
     .desktop-ranking-player,
@@ -1895,11 +1934,15 @@ def inject_css():
     }}
 
     .desktop-ranking-period {{
+        display: inline-block;
         color: rgba(220,231,231,0.78);
         font-size: 0.82rem;
         font-weight: 780;
         line-height: 1.45;
-        overflow-wrap: anywhere;
+        overflow-wrap: normal;
+        word-break: keep-all;
+        white-space: normal;
+        text-align: center;
     }}
 
     .st-key-ranking_general_pagination,
@@ -1911,6 +1954,22 @@ def inject_css():
         background:
             linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.012)),
             rgba(0,0,0,0.12);
+    }}
+
+    .st-key-ranking_general_pagination [data-testid="stHorizontalBlock"],
+    .st-key-ranking_average_pagination [data-testid="stHorizontalBlock"] {{
+        display: grid !important;
+        grid-template-columns: minmax(92px, 0.82fr) minmax(150px, 1.4fr) minmax(92px, 0.82fr) !important;
+        gap: 0.72rem !important;
+        align-items: center !important;
+        width: 100% !important;
+    }}
+
+    .st-key-ranking_general_pagination [data-testid="column"],
+    .st-key-ranking_average_pagination [data-testid="column"] {{
+        width: 100% !important;
+        min-width: 0 !important;
+        flex: unset !important;
     }}
 
     .st-key-ranking_general_pagination .page-note,
@@ -4221,6 +4280,7 @@ def render_interactive_ranking_table(data, key_prefix, public_profile_index):
         return
 
     columns = list(data.columns)
+    average_table = any(str(column) in {"Média", "Período"} for column in columns)
 
     def column_class(column):
         if column == "#":
@@ -4234,6 +4294,26 @@ def render_interactive_ranking_table(data, key_prefix, public_profile_index):
         if column == "Período":
             return "period-column"
         return ""
+
+    def colgroup_html():
+        if average_table:
+            mapping = {
+                "#": "rank-col",
+                "Jogador": "avg-player-col",
+                "Estado": "avg-state-col",
+                "Média": "avg-metric-col",
+                "Período": "period-col",
+                "Dias": "avg-days-col",
+            }
+        else:
+            mapping = {
+                "#": "rank-col",
+                "Jogador": "player-col",
+                "Estado": "state-col",
+                "Capturas": "metric-col",
+                "Dias ativo": "days-col",
+            }
+        return "".join(f'<col class="{mapping.get(str(column), "metric-col")}">' for column in columns)
 
     header = "".join(
         f'<th class="{column_class(str(column))}">{escape(str(column))}</th>'
@@ -4278,6 +4358,7 @@ def render_interactive_ranking_table(data, key_prefix, public_profile_index):
     ui_html(f"""
         <div class="desktop-ranking-wrap">
             <table class="desktop-ranking-table">
+                <colgroup>{colgroup_html()}</colgroup>
                 <thead><tr>{header}</tr></thead>
                 <tbody>{"".join(rows)}</tbody>
             </table>
