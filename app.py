@@ -1657,9 +1657,9 @@ def inject_css():
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 44px;
-        height: 44px;
-        padding: 0 0.62rem;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 0.5rem;
         border-radius: 999px;
         color: var(--rb-gold);
         border: 1px solid rgba(226,184,79,0.26);
@@ -1681,7 +1681,7 @@ def inject_css():
         min-width: 0;
         display: flex;
         align-items: center;
-        gap: 0.48rem;
+        gap: 0.28rem;
         flex-wrap: wrap;
     }}
 
@@ -1712,7 +1712,8 @@ def inject_css():
     [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stHorizontalBlock"],
     [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stHorizontalBlock"] {{
         align-items: center;
-        gap: 0.48rem;
+        justify-content: flex-start;
+        gap: 0.28rem;
         flex-wrap: wrap;
     }}
 
@@ -3670,7 +3671,8 @@ def inject_css():
         [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stHorizontalBlock"] {{
             display: flex !important;
             align-items: center !important;
-            gap: 0.48rem !important;
+            justify-content: flex-start !important;
+            gap: 0.28rem !important;
             flex-wrap: wrap !important;
             width: 100%;
         }}
@@ -3679,15 +3681,26 @@ def inject_css():
         [class*="st-key-ranking_average_mobile_card_header_"] [data-testid="stVerticalBlock"],
         [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stVerticalBlock"],
         [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stVerticalBlock"] {{
+            flex: 0 1 auto !important;
             min-width: 0;
-            width: fit-content;
+            width: auto !important;
             max-width: 100%;
+        }}
+
+        [class*="st-key-ranking_general_mobile_card_header_"] [data-testid="stElementContainer"],
+        [class*="st-key-ranking_average_mobile_card_header_"] [data-testid="stElementContainer"],
+        [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stElementContainer"],
+        [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stElementContainer"] {{
+            width: auto !important;
+            min-width: 0 !important;
+            flex: 0 1 auto !important;
         }}
 
         [class*="st-key-ranking_general_mobile_player_link_"],
         [class*="st-key-ranking_average_mobile_player_link_"],
         [class*="st-key-ranking-general-mobile-player-link-"],
         [class*="st-key-ranking-average-mobile-player-link-"] {{
+            flex: 0 1 auto !important;
             min-width: 0;
             max-width: 100%;
         }}
@@ -3696,7 +3709,7 @@ def inject_css():
         [class*="st-key-ranking_average_mobile_card_body_"] .mobile-ranking-body,
         [class*="st-key-ranking-general-mobile-card-body-"] .mobile-ranking-body,
         [class*="st-key-ranking-average-mobile-card-body-"] .mobile-ranking-body {{
-            margin-left: calc(44px + 0.48rem);
+            margin-left: calc(40px + 0.28rem);
         }}
 
         [class*="st-key-ranking_general_mobile_card_item_"][class*="_top_"],
