@@ -2535,6 +2535,8 @@ def inject_css():
     }}
 
     .capture-medal-icon-wrap {{
+        position: relative;
+        z-index: 2;
         width: 62px;
         height: 62px;
         display: flex;
@@ -2573,10 +2575,39 @@ def inject_css():
         height: 34px;
         visibility: visible !important;
         opacity: 1 !important;
-        stroke: currentColor !important;
+        position: relative;
+        z-index: 5;
+        stroke: #f4c95d !important;
         fill: none !important;
         overflow: visible;
         filter: drop-shadow(0 0 10px var(--medal-glow));
+    }}
+
+    .capture-medal-icon-wrap svg * {{
+        visibility: visible !important;
+        opacity: 1 !important;
+        stroke: #f4c95d !important;
+        fill: none !important;
+    }}
+
+    .capture-medal-card.bronze .capture-medal-icon-wrap svg,
+    .capture-medal-card.bronze .capture-medal-icon-wrap svg * {{
+        stroke: #f0c08a !important;
+    }}
+
+    .capture-medal-card.silver .capture-medal-icon-wrap svg,
+    .capture-medal-card.silver .capture-medal-icon-wrap svg * {{
+        stroke: #d7ebff !important;
+    }}
+
+    .capture-medal-card.gold .capture-medal-icon-wrap svg,
+    .capture-medal-card.gold .capture-medal-icon-wrap svg * {{
+        stroke: #f4c95d !important;
+    }}
+
+    .capture-medal-card.platinum .capture-medal-icon-wrap svg,
+    .capture-medal-card.platinum .capture-medal-icon-wrap svg * {{
+        stroke: #d7fff3 !important;
     }}
 
     .capture-medal-title {{
@@ -3981,7 +4012,7 @@ def medal_icon_svg(icon_type):
     }
     paths = icons.get(icon_type, icons["target"])
     return f"""
-        <svg viewBox="0 0 24 24" style="display:block;width:32px;height:32px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="#f4c95d" fill="none" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="display:block !important;width:34px !important;height:34px !important;stroke:#f4c95d !important;fill:none !important;visibility:visible !important;opacity:1 !important;position:relative;z-index:5;overflow:visible;" aria-hidden="true">
             {paths}
         </svg>
     """
@@ -3989,7 +4020,7 @@ def medal_icon_svg(icon_type):
 
 def lock_icon_svg():
     return """
-        <svg viewBox="0 0 24 24" style="display:block;width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="#f4c95d" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;width:16px;height:16px;stroke:#f4c95d;fill:none;visibility:visible;opacity:1;" aria-hidden="true">
             <rect x="5" y="10" width="14" height="10" rx="2"></rect>
             <path d="M8 10V7a4 4 0 018 0v3"></path>
         </svg>
