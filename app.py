@@ -48,6 +48,7 @@ st.set_page_config(
 
 
 MAX_CATCHES_INPUT = 9_999_999_999
+PAGINATION_DEBOUNCE_SECONDS = 0.35
 
 
 @st.cache_data(show_spinner=False, ttl=300)
@@ -1613,7 +1614,15 @@ def inject_css():
         text-align: center;
         color: var(--rb-muted);
         font-size: 0.78rem;
-        padding-top: 0.38rem;
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.38rem 0.5rem;
+        border: 1px solid var(--rb-line);
+        border-radius: var(--rb-radius-md);
+        background: rgba(255,255,255,0.028);
+        font-weight: 820;
     }}
 
     .state-grid {{
@@ -2489,6 +2498,7 @@ def inject_css():
         .block-container {{
             padding-left: 0.85rem;
             padding-right: 0.85rem;
+            padding-top: 4.1rem !important;
         }}
 
         .nav-shell {{
@@ -2499,9 +2509,79 @@ def inject_css():
             display: none;
         }}
 
+        .st-key-navbar {{
+            top: 2.9rem;
+            padding: 0.62rem 0.72rem;
+        }}
+
+        .brand-orb {{
+            width: 36px;
+            height: 36px;
+        }}
+
+        .brand-name {{
+            font-size: 0.95rem;
+        }}
+
+        .brand-sub {{
+            font-size: 0.64rem;
+            white-space: normal;
+        }}
+
         .hero-stat-grid,
         .podium {{
             grid-template-columns: 1fr;
+        }}
+
+        .rb-table-wrap {{
+            margin-inline: -0.25rem;
+            border-radius: var(--rb-radius-md);
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: contain;
+        }}
+
+        .rb-table {{
+            min-width: 540px;
+            font-size: 0.74rem;
+        }}
+
+        .rb-table th,
+        .rb-table td {{
+            padding: 0.56rem 0.52rem;
+        }}
+
+        .page-note {{
+            min-height: 46px;
+            font-size: 0.76rem;
+            padding: 0.45rem 0.35rem;
+        }}
+
+        .stButton > button {{
+            min-height: 46px;
+            padding: 0.62rem 0.55rem;
+            font-size: 0.82rem;
+            touch-action: manipulation;
+        }}
+
+        .stButton > button:active {{
+            transform: scale(0.985);
+        }}
+
+        .stButton > button:disabled {{
+            transform: none;
+        }}
+
+        .stDataFrame,
+        [data-testid="stDataFrame"] {{
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }}
+
+        .js-plotly-plot,
+        .plot-container {{
+            max-width: 100%;
+            overflow: hidden;
         }}
 
         .stat-card {{
@@ -2604,6 +2684,7 @@ def inject_css():
         .block-container {{
             padding-left: 0.65rem;
             padding-right: 0.65rem;
+            padding-bottom: 2.6rem !important;
         }}
 
         .profile-metric-grid,
@@ -2670,11 +2751,28 @@ def inject_css():
         .st-key-states_section,
         .st-key-ranges_section {{
             border-radius: 22px;
-            padding: 1rem;
+            padding: 0.9rem;
+        }}
+
+        .st-key-chart_panel,
+        .st-key-filters_panel,
+        .st-key-ranking_general_panel,
+        .st-key-ranking_average_panel,
+        .st-key-distribution_panel,
+        .st-key-curation_filter_shell,
+        .st-key-curation_queue_shell,
+        .st-key-curation_review_shell {{
+            padding: 0.82rem;
         }}
 
         .hero-title {{
             font-size: clamp(2rem, 13vw, 3rem);
+        }}
+
+        .hero-copy,
+        .page-copy {{
+            font-size: 0.92rem;
+            line-height: 1.55;
         }}
 
         .hero-actions .rb-button {{
@@ -2687,6 +2785,17 @@ def inject_css():
 
         .stat-value {{
             font-size: clamp(1.85rem, 11vw, 2.55rem);
+        }}
+
+        .rb-table {{
+            min-width: 500px;
+            font-size: 0.72rem;
+        }}
+
+        .page-note {{
+            min-height: 48px;
+            font-size: 0.72rem;
+            line-height: 1.2;
         }}
 
         .state-grid,
@@ -3039,25 +3148,81 @@ def table_html(data):
     """
 
 
+def clamp_page_index(value, page_count):
+    page_count = max(1, int(page_count or 1))
+    try:
+        page = int(value)
+    except (TypeError, ValueError):
+        page = 0
+    return max(0, min(page, page_count - 1))
+
+
+def init_pagination_state(page_key, page_count=1, signature=None):
+    signature_key = f"{page_key}_signature"
+    if signature is not None and st.session_state.get(signature_key) != signature:
+        st.session_state[signature_key] = signature
+        st.session_state[page_key] = 0
+
+    page = clamp_page_index(st.session_state.get(page_key, 0), page_count)
+    st.session_state[page_key] = page
+    return page
+
+
+def change_pagination_page(page_key, page_count, delta):
+    changed_at_key = f"{page_key}_changed_at"
+    now = time.monotonic()
+    last_changed_at = float(st.session_state.get(changed_at_key, 0) or 0)
+    if now - last_changed_at < PAGINATION_DEBOUNCE_SECONDS:
+        return
+
+    current = clamp_page_index(st.session_state.get(page_key, 0), page_count)
+    st.session_state[page_key] = clamp_page_index(current + delta, page_count)
+    st.session_state[changed_at_key] = now
+
+
+def render_pagination_controls(page_key, page_count, key_prefix):
+    current = init_pagination_state(page_key, page_count)
+    page_count = max(1, int(page_count or 1))
+
+    prev_col, page_col, next_col = st.columns([0.30, 0.40, 0.30], vertical_alignment="center")
+    with prev_col:
+        st.button(
+            "Anterior",
+            key=f"{key_prefix}_prev",
+            disabled=current <= 0,
+            on_click=change_pagination_page,
+            args=(page_key, page_count, -1),
+        )
+    with page_col:
+        ui_html(f'<div class="page-note">Página {current + 1} de {page_count}</div>')
+    with next_col:
+        st.button(
+            "Próxima",
+            key=f"{key_prefix}_next",
+            disabled=current >= page_count - 1,
+            on_click=change_pagination_page,
+            args=(page_key, page_count, 1),
+        )
+    return current
+
+
 def render_paginated_table(title, data, key):
     st.markdown(f"#### {title}")
     page_size = 10
     page_count = max(1, int(np.ceil(len(data) / page_size)))
     page_key = f"{key}_page"
-    st.session_state.setdefault(page_key, 0)
-    st.session_state[page_key] = min(st.session_state[page_key], page_count - 1)
+    if data.empty:
+        data_signature = ("empty", title)
+    else:
+        data_signature = (
+            len(data),
+            tuple(str(column) for column in data.columns),
+            int(pd.util.hash_pandas_object(data, index=True).sum()),
+        )
+    init_pagination_state(page_key, page_count, signature=data_signature)
+    current_page_index = render_pagination_controls(page_key, page_count, key)
 
-    prev_col, page_col, next_col = st.columns([0.24, 0.52, 0.24], vertical_alignment="center")
-    with prev_col:
-        if st.button("Anterior", key=f"{key}_prev", disabled=st.session_state[page_key] <= 0):
-            st.session_state[page_key] -= 1
-    with page_col:
-        ui_html(f'<div class="page-note">Página {st.session_state[page_key] + 1} de {page_count}</div>')
-    with next_col:
-        if st.button("Próxima", key=f"{key}_next", disabled=st.session_state[page_key] >= page_count - 1):
-            st.session_state[page_key] += 1
-
-    start = st.session_state[page_key] * page_size
+    start = current_page_index * page_size
     page = data.iloc[start:start + page_size]
     ui_html(table_html(page))
 
@@ -3353,9 +3518,10 @@ def render_curation_page(profile):
 
     page_size = 10
     page_key = "curation_page"
-    st.session_state.setdefault(page_key, 0)
     status = status_options[selected_status_label]
     order_by, order_direction = order_options[selected_order_label]
+    curation_signature = (status, search.strip(), order_by, order_direction)
+    page_index = init_pagination_state(page_key, 1, signature=curation_signature)
 
     result = get_curation_queue(
         str(profile.get("id")),
@@ -3363,7 +3529,7 @@ def render_curation_page(profile):
         search.strip(),
         order_by,
         order_direction,
-        int(st.session_state[page_key]),
+        page_index,
         page_size,
     )
     if not result.get("success"):
@@ -3373,9 +3539,22 @@ def render_curation_page(profile):
     total = int(result.get("total", 0))
     records = result.get("records", [])
     page_count = max(1, int(np.ceil(total / page_size)))
-    if st.session_state[page_key] >= page_count:
-        st.session_state[page_key] = page_count - 1
-        st.rerun()
+    clamped_page_index = init_pagination_state(page_key, page_count, signature=curation_signature)
+    if clamped_page_index != page_index:
+        page_index = clamped_page_index
+        result = get_curation_queue(
+            str(profile.get("id")),
+            status,
+            search.strip(),
+            order_by,
+            order_direction,
+            page_index,
+            page_size,
+        )
+        if not result.get("success"):
+            st.error("; ".join(result.get("errors", ["Nao foi possivel carregar a curadoria."])))
+            return
+        records = result.get("records", [])
 
     pending_total = total if status == "pendente" and not search.strip() else None
     if pending_total is None:
@@ -3393,7 +3572,7 @@ def render_curation_page(profile):
             </article>
             <article class="profile-metric">
                 <div class="profile-metric-label">Página</div>
-                <div class="profile-metric-value">{st.session_state[page_key] + 1}/{page_count}</div>
+                <div class="profile-metric-value">{page_index + 1}/{page_count}</div>
             </article>
             <article class="profile-metric">
                 <div class="profile-metric-label">Status</div>
@@ -3428,17 +3607,7 @@ def render_curation_page(profile):
             height=min(500, 92 + len(queue_view) * 38),
         )
 
-        prev_col, page_col, next_col = st.columns([0.24, 0.52, 0.24], vertical_alignment="center")
-        with prev_col:
-            if st.button("Anterior", key="curation_prev", disabled=st.session_state[page_key] <= 0):
-                st.session_state[page_key] -= 1
-                st.rerun()
-        with page_col:
-            ui_html(f'<div class="page-note">Página {st.session_state[page_key] + 1} de {page_count}</div>')
-        with next_col:
-            if st.button("Próxima", key="curation_next", disabled=st.session_state[page_key] >= page_count - 1):
-                st.session_state[page_key] += 1
-                st.rerun()
+        render_pagination_controls(page_key, page_count, "curation")
 
     labels = [
         f"#{row['id']} · {row.get('nickname') or '-'} · {row.get('usuario_email') or '-'} · {format_int(row['catches'])}"
