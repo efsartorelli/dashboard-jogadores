@@ -3,6 +3,7 @@ import unittest
 from src.data.loaders import load_excel_data
 from src.metrics.averages import build_average_ranking, calculate_daily_averages
 from src.metrics.distribution import build_distribution
+from src.metrics.formatting import format_compact
 from src.metrics.medals import CAPTURE_MEDAL_COUNT, build_capture_medals, calculate_medal_progress
 from src.metrics.rankings import build_general_ranking, get_best_catches
 from src.metrics.states import build_state_stats
@@ -58,6 +59,8 @@ class MetricsRegressionTest(unittest.TestCase):
         self.assertEqual(len(medals), 35)
         self.assertEqual(medals[0]["threshold"], 100_000)
         self.assertEqual(medals[-1]["threshold"], 3_500_000)
+        self.assertEqual({medal["icon_type"] for medal in medals[:9]}, {"target", "map", "bolt", "radar", "spark", "orbit", "chart", "streak", "shine"})
+        self.assertIn("star", {medal["shape_type"] for medal in medals if medal["tier"] == "platinum"})
 
         progress = calculate_medal_progress(850_000)
         self.assertEqual(progress["unlocked_count"], 8)
@@ -70,6 +73,9 @@ class MetricsRegressionTest(unittest.TestCase):
         self.assertEqual(complete["unlocked_count"], 35)
         self.assertIsNone(complete["next_medal"])
         self.assertEqual(complete["progress_pct"], 100)
+
+    def test_compact_format_keeps_full_brazilian_number(self):
+        self.assertEqual(format_compact(2_059_000), "2.059.000")
 
 
 if __name__ == "__main__":

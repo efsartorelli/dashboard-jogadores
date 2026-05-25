@@ -41,49 +41,11 @@ _MEDAL_TITLES = [
     "Lenda do Ranking",
 ]
 
-_MEDAL_DESCRIPTIONS = [
-    "Primeiras 100 mil capturas registradas.",
-    "Consistencia visivel no historico.",
-    "Rotina ativa de captura em crescimento.",
-    "Ritmo firme rumo aos grandes marcos.",
-    "Metade do caminho para o primeiro milhao.",
-    "Volume forte e progresso sustentado.",
-    "Nivel avancado de capturas acumuladas.",
-    "Foco alto e presenca constante.",
-    "Na porta do primeiro grande milhao.",
-    "Entrada oficial no clube do milhao.",
-    "Primeiro ciclo prateado desbloqueado.",
-    "Historico competitivo ganhando corpo.",
-    "Pulso forte no ranking nacional.",
-    "Avanco consistente entre jogadores ativos.",
-    "Sequencia de elite em capturas.",
-    "Dominio de rotas e regularidade.",
-    "Precisao alta no crescimento mensal.",
-    "Escalada firme entre os melhores.",
-    "Ritmo protegido por alto volume.",
-    "Segundo milhao conquistado.",
-    "Defesa dourada do progresso.",
-    "Controle de campo em alto nivel.",
-    "Forca ascendente no ranking.",
-    "Intensidade competitiva em destaque.",
-    "Marco lendario de 2.5 milhoes.",
-    "Trilha dourada sustentada.",
-    "Persistencia extrema em capturas.",
-    "Auge regional em volume registrado.",
-    "Patamar de elite nacional.",
-    "Tres milhoes de capturas registradas.",
-    "Brilho raro acima de 3.1 milhoes.",
-    "Estrela competitiva de alto impacto.",
-    "Patamar diamante em capturas.",
-    "Coroa de consistencia extrema.",
-    "Marco maximo atual do ranking.",
-]
-
 _ICON_CYCLES = {
-    "bronze": ["target", "map", "bolt", "spark"],
-    "silver": ["radar", "chart", "shield", "spark"],
-    "gold": ["trophy", "flame", "shield", "chart"],
-    "platinum": ["star", "diamond", "crown", "spark"],
+    "bronze": ["target", "map", "bolt", "radar", "spark", "orbit", "chart", "streak", "shine"],
+    "silver": ["radar", "chart", "shield", "orbit", "star", "evolution", "spark", "crystal", "target", "bolt"],
+    "gold": ["trophy", "flame", "shield", "chart", "crown", "streak", "radar", "star", "orbit", "shine"],
+    "platinum": ["star", "diamond", "crown", "crystal", "evolution", "trophy"],
 }
 
 
@@ -105,11 +67,12 @@ def build_capture_medals() -> list[dict]:
         tier, shape_type = _tier_for_threshold(threshold)
         tier_index = tier_indexes.get(tier, 0)
         tier_indexes[tier] = tier_index + 1
+        if tier == "platinum" and tier_index % 2 == 1:
+            shape_type = "star"
         icons = _ICON_CYCLES[tier]
         medals.append({
             "threshold": threshold,
             "title": title,
-            "description": _MEDAL_DESCRIPTIONS[index - 1],
             "tier": tier,
             "icon_type": icons[tier_index % len(icons)],
             "shape_type": shape_type,

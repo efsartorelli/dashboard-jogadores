@@ -2356,6 +2356,17 @@ def inject_css():
         line-height: 1.35;
     }}
 
+    .achievement-empty {{
+        margin-top: 0.8rem;
+        border: 1px dashed rgba(240,218,159,0.18);
+        border-radius: var(--rb-radius-md);
+        padding: 0.95rem;
+        color: var(--rb-muted);
+        background: rgba(255,255,255,0.026);
+        font-size: 0.88rem;
+        line-height: 1.45;
+    }}
+
     .capture-medals-section {{
         margin: 1rem 0;
         border: 1px solid var(--rb-border);
@@ -2438,22 +2449,27 @@ def inject_css():
 
     .capture-medal-grid {{
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
         gap: 0.72rem;
         margin-top: 1rem;
     }}
 
     .capture-medal-card {{
         position: relative;
-        min-height: 184px;
+        min-height: 154px;
         padding: 0.82rem;
         border: 1px solid var(--medal-border);
         border-radius: var(--rb-radius-md);
         overflow: hidden;
         background:
-            radial-gradient(circle at 50% -20%, var(--medal-glow), transparent 8rem),
+            radial-gradient(circle at 50% -22%, var(--medal-glow), transparent 8rem),
             linear-gradient(155deg, rgba(255,255,255,0.052), rgba(255,255,255,0.018));
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 34px rgba(0,0,0,0.18);
+        transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    }}
+
+    .capture-medal-card:hover {{
+        transform: translateY(-3px);
     }}
 
     .capture-medal-card.unlocked {{
@@ -2468,7 +2484,8 @@ def inject_css():
 
     .capture-medal-card.locked {{
         filter: grayscale(0.75);
-        opacity: 0.62;
+        opacity: 0.58;
+        background: linear-gradient(155deg, rgba(255,255,255,0.032), rgba(255,255,255,0.012));
     }}
 
     .capture-medal-card.latest::after {{
@@ -2518,12 +2535,12 @@ def inject_css():
     }}
 
     .capture-medal-icon-wrap {{
-        width: 58px;
-        height: 58px;
+        width: 62px;
+        height: 62px;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-bottom: 0.68rem;
+        margin: 0 auto 0.72rem;
         color: var(--medal-soft);
         background: linear-gradient(145deg, var(--medal-fill), rgba(255,255,255,0.04));
         border: 1px solid var(--medal-border);
@@ -2546,10 +2563,14 @@ def inject_css():
         clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
     }}
 
+    .capture-medal-icon-wrap.star {{
+        clip-path: polygon(50% 0, 62% 33%, 98% 35%, 69% 57%, 79% 92%, 50% 72%, 21% 92%, 31% 57%, 2% 35%, 38% 33%);
+    }}
+
     .capture-medal-icon-wrap svg {{
         display: block !important;
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         visibility: visible !important;
         opacity: 1 !important;
         stroke: currentColor !important;
@@ -2564,6 +2585,7 @@ def inject_css():
         font-weight: 930;
         line-height: 1.15;
         min-height: 2.05em;
+        text-align: center;
     }}
 
     .capture-medal-threshold {{
@@ -2571,19 +2593,13 @@ def inject_css():
         color: var(--medal-soft);
         font-size: 0.78rem;
         font-weight: 900;
-    }}
-
-    .capture-medal-description {{
-        margin-top: 0.36rem;
-        color: var(--rb-muted);
-        font-size: 0.74rem;
-        line-height: 1.34;
+        text-align: center;
     }}
 
     .capture-medal-status {{
         display: inline-flex;
         width: fit-content;
-        margin-top: 0.58rem;
+        margin: 0.58rem auto 0;
         border: 1px solid var(--medal-border);
         border-radius: 999px;
         padding: 0.18rem 0.42rem;
@@ -3007,7 +3023,7 @@ def inject_css():
         }}
 
         .capture-medal-card {{
-            min-height: 174px;
+            min-height: 150px;
             padding: 0.72rem;
         }}
 
@@ -3088,7 +3104,7 @@ def inject_css():
         }}
 
         .capture-medal-card {{
-            min-height: 166px;
+            min-height: 148px;
         }}
 
         .capture-medal-icon-wrap {{
@@ -3902,16 +3918,37 @@ def medal_icon_svg(icon_type):
             <path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2z"></path>
             <path d="M5 17l.7 2.3L8 20l-2.3.7L5 23l-.7-2.3L2 20l2.3-.7L5 17z"></path>
         """,
+        "shine": """
+            <path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path>
+            <path d="M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"></path>
+            <circle cx="12" cy="12" r="2.5"></circle>
+        """,
         "radar": """
             <circle cx="12" cy="12" r="9"></circle>
             <circle cx="12" cy="12" r="2"></circle>
             <path d="M12 12l6-5M4 12a8 8 0 018-8M7 17a7 7 0 0010-10"></path>
+        """,
+        "orbit": """
+            <circle cx="12" cy="12" r="2.4"></circle>
+            <ellipse cx="12" cy="12" rx="9" ry="4.2" transform="rotate(24 12 12)"></ellipse>
+            <ellipse cx="12" cy="12" rx="9" ry="4.2" transform="rotate(-24 12 12)"></ellipse>
+            <circle cx="19" cy="9" r="1.4"></circle>
         """,
         "chart": """
             <path d="M4 19V5"></path>
             <path d="M4 19h16"></path>
             <path d="M7 15l4-4 3 3 5-7"></path>
             <path d="M16 7h3v3"></path>
+        """,
+        "evolution": """
+            <path d="M4 17c4 0 7-2 8-6"></path>
+            <path d="M12 11l-1-4 4 1"></path>
+            <path d="M6 7h4v4H6z"></path>
+            <path d="M14 14h5v5h-5z"></path>
+        """,
+        "streak": """
+            <path d="M5 18c2-6 5-5 6-11 3 2 5 5 3 9 1-1 2-2 4-2-.2 4-3 7-7 7-3 0-5-1-6-3z"></path>
+            <path d="M11 21c-1.5-2-.2-3.5 1.2-5 1.8 1.8 2.4 3.6.8 5"></path>
         """,
         "shield": """
             <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"></path>
@@ -3932,6 +3969,10 @@ def medal_icon_svg(icon_type):
         "diamond": """
             <path d="M6 3h12l4 6-10 12L2 9l4-6z"></path>
             <path d="M2 9h20M8 3l-2 6 6 12 6-12-2-6"></path>
+        """,
+        "crystal": """
+            <path d="M12 2l7 5-2 12-5 3-5-3L5 7l7-5z"></path>
+            <path d="M5 7h14M9 7l3 15 3-15M12 2v5"></path>
         """,
         "crown": """
             <path d="M3 8l4 4 5-8 5 8 4-4-2 11H5L3 8z"></path>
@@ -3997,14 +4038,13 @@ def render_capture_medals_section(total_captures):
         latest_class = " latest" if medal.get("is_latest") else ""
         lock_html = f'<div class="capture-medal-lock">{lock_icon_svg()}</div>' if status == "locked" else ""
         cards.append(f"""
-            <article class="capture-medal-card {escape(medal['tier'])} {escape(status)}{latest_class}" title="{escape(medal['description'])}">
+            <article class="capture-medal-card {escape(medal['tier'])} {escape(status)}{latest_class}" title="{escape(medal['title'])}">
                 {lock_html}
                 <div class="capture-medal-icon-wrap {escape(medal['shape_type'])}">
                     {medal_icon_svg(medal['icon_type'])}
                 </div>
                 <div class="capture-medal-title">{escape(medal['title'])}</div>
                 <div class="capture-medal-threshold">{format_int(medal['threshold'])} capturas</div>
-                <div class="capture-medal-description">{escape(medal['description'])}</div>
                 <div class="capture-medal-status">{status_labels[status]}</div>
             </article>
         """)
@@ -4029,6 +4069,58 @@ def render_capture_medals_section(total_captures):
             <div class="capture-medal-grid">{"".join(cards)}</div>
         </section>
     """)
+
+
+def normalize_admin_achievements(profile):
+    raw_items = (
+        (profile or {}).get("admin_achievements")
+        or (profile or {}).get("manual_achievements")
+        or (profile or {}).get("achievements")
+        or []
+    )
+    if isinstance(raw_items, str):
+        raw_items = [raw_items] if raw_items.strip() else []
+
+    achievements = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            title = str(item.get("title") or item.get("nome") or "").strip()
+            copy = str(item.get("description") or item.get("descricao") or "Conquista atribuida pela curadoria.").strip()
+            code = str(item.get("code") or title[:2] or "BR").strip()
+        else:
+            title = str(item or "").strip()
+            copy = "Conquista atribuida pela curadoria."
+            code = title[:2] or "BR"
+        if title:
+            achievements.append({
+                "title": title,
+                "description": copy,
+                "code": code[:2].upper(),
+            })
+    return achievements
+
+
+def render_admin_achievements_panel(profile):
+    achievements = normalize_admin_achievements(profile)
+    if not achievements:
+        return """
+            <div class="achievement-empty">
+                Nenhuma conquista especial atribuida ainda.
+            </div>
+        """
+
+    cards = []
+    for achievement in achievements:
+        cards.append(f"""
+            <article class="achievement-card">
+                <div class="achievement-badge">{escape(achievement['code'])}</div>
+                <div>
+                    <div class="achievement-title">{escape(achievement['title'])}</div>
+                    <div class="achievement-copy">{escape(achievement['description'])}</div>
+                </div>
+            </article>
+        """)
+    return f'<div class="achievement-grid">{"".join(cards)}</div>'
 
 
 def get_query_param_value(name):
@@ -4259,18 +4351,7 @@ def build_public_player_insights(public_profile, dashboard_data):
 def render_public_player_profile(public_profile, dashboard_data):
     insights = build_public_player_insights(public_profile, dashboard_data)
     avatar = trainer_avatar(insights["nickname"], int(str(insights["rank"]).replace("#", "") or 1) if insights["rank"] != "-" else 1)
-    medals_html = "".join(
-        f"""
-        <article class="achievement-card">
-            <div class="achievement-badge">{escape(title[:2].upper())}</div>
-            <div>
-                <div class="achievement-title">{escape(title)}</div>
-                <div class="achievement-copy">{escape(copy)}</div>
-            </div>
-        </article>
-        """
-        for title, copy in insights["medals"]
-    )
+    achievements_html = render_admin_achievements_panel(public_profile)
     activities_html = "".join(
         f"""
         <div class="activity-row">
@@ -4311,11 +4392,11 @@ def render_public_player_profile(public_profile, dashboard_data):
                 <div class="profile-metric-value">{format_compact(insights["latest_catches"])}</div>
             </article>
             <article class="profile-metric">
-                <div class="profile-metric-label">Media diaria</div>
+                <div class="profile-metric-label">Media diaria geral</div>
                 <div class="profile-metric-value">{format_compact(insights["daily_average"])}</div>
             </article>
             <article class="profile-metric">
-                <div class="profile-metric-label">Evolucao mensal</div>
+                <div class="profile-metric-label">Media mensal geral</div>
                 <div class="profile-metric-value">{format_signed_compact(insights["monthly_delta"])}</div>
             </article>
             <article class="profile-metric">
@@ -4361,8 +4442,8 @@ def render_public_player_profile(public_profile, dashboard_data):
     ui_html(f"""
         <div class="premium-grid">
             <div class="premium-panel">
-                <div class="premium-card-label">Conquistas</div>
-                <div class="achievement-grid">{medals_html}</div>
+                <div class="premium-card-label">Conquistas especiais</div>
+                {achievements_html}
             </div>
             <div class="premium-panel">
                 <div class="premium-card-label">Ultimas atualizacoes</div>
@@ -4603,18 +4684,7 @@ def render_profile_page(profile, session: AuthSession):
     limit = entitlement.monthly_limit
     remaining = entitlement.remaining_this_month
     progress_pct = insights["progress_pct"]
-    medals_html = "".join(
-        f"""
-        <article class="achievement-card">
-            <div class="achievement-badge">{escape(title[:2].upper())}</div>
-            <div>
-                <div class="achievement-title">{escape(title)}</div>
-                <div class="achievement-copy">{escape(copy)}</div>
-            </div>
-        </article>
-        """
-        for title, copy in insights["medals"]
-    )
+    achievements_html = render_admin_achievements_panel(profile)
     activity_html = "".join(
         f"""
         <div class="activity-row">
@@ -4660,11 +4730,11 @@ def render_profile_page(profile, session: AuthSession):
                 <div class="profile-metric-value">{escape(insights["rank"])}</div>
             </article>
             <article class="profile-metric">
-                <div class="profile-metric-label">Evolução mensal</div>
+                <div class="profile-metric-label">Média mensal geral</div>
                 <div class="profile-metric-value">{format_signed_compact(insights["monthly_delta"])}</div>
             </article>
             <article class="profile-metric">
-                <div class="profile-metric-label">Média diária</div>
+                <div class="profile-metric-label">Média diária geral</div>
                 <div class="profile-metric-value">{format_compact(insights["daily_average"])}</div>
             </article>
             <article class="profile-metric">
@@ -4696,8 +4766,8 @@ def render_profile_page(profile, session: AuthSession):
         with left:
             ui_html(f"""
                 <div class="premium-panel">
-                    <div class="premium-card-label">Conquistas</div>
-                    <div class="achievement-grid">{medals_html}</div>
+                    <div class="premium-card-label">Conquistas especiais</div>
+                    {achievements_html}
                 </div>
             """)
         with right:

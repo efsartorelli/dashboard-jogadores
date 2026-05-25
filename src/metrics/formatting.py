@@ -3,14 +3,7 @@ def format_int(value) -> str:
 
 
 def format_compact(value) -> str:
-    value = int(value)
-    if value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.1f}B".replace(".", ",")
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M".replace(".", ",")
-    if value >= 1_000:
-        return f"{value / 1_000:.0f}k"
-    return str(value)
+    return format_int(value)
 
 
 def initials(name) -> str:
