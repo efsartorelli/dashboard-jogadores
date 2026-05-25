@@ -2549,6 +2549,104 @@ def inject_css():
         box-shadow: 0 0 24px var(--medal-glow);
     }}
 
+    .capture-medal-icon-wrap::before {{
+        content: "";
+        position: absolute;
+        inset: 15px;
+        z-index: 4;
+        display: block;
+        background: currentColor;
+        opacity: 1;
+        pointer-events: none;
+        filter: drop-shadow(0 0 10px var(--medal-glow));
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-target::before {{
+        inset: 13px;
+        border-radius: 999px;
+        background:
+            radial-gradient(circle, currentColor 0 14%, transparent 15% 32%, currentColor 33% 43%, transparent 44% 60%, currentColor 61% 72%, transparent 73%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-map::before {{
+        inset: 14px 12px;
+        clip-path: polygon(0 12%, 30% 0, 64% 12%, 100% 0, 100% 86%, 70% 100%, 36% 86%, 0 100%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-bolt::before {{
+        inset: 10px 16px;
+        clip-path: polygon(58% 0, 8% 58%, 43% 58%, 32% 100%, 94% 39%, 56% 39%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-spark::before,
+    .capture-medal-icon-wrap.medal-icon-shine::before {{
+        inset: 10px;
+        clip-path: polygon(50% 0, 61% 35%, 100% 50%, 61% 65%, 50% 100%, 39% 65%, 0 50%, 39% 35%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-radar::before {{
+        inset: 11px;
+        border-radius: 999px;
+        background:
+            conic-gradient(from 315deg, currentColor 0deg 42deg, transparent 43deg 360deg),
+            radial-gradient(circle, currentColor 0 10%, transparent 11% 28%, currentColor 29% 36%, transparent 37% 54%, currentColor 55% 64%, transparent 65%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-orbit::before {{
+        inset: 13px;
+        border-radius: 999px;
+        background:
+            radial-gradient(circle at 72% 28%, currentColor 0 9%, transparent 10%),
+            radial-gradient(circle, currentColor 0 17%, transparent 18%),
+            linear-gradient(30deg, transparent 28%, currentColor 29% 35%, transparent 36% 64%, currentColor 65% 71%, transparent 72%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-chart::before {{
+        inset: 13px 12px;
+        background:
+            linear-gradient(to top, currentColor 0 45%, transparent 46%) left bottom / 24% 100% no-repeat,
+            linear-gradient(to top, currentColor 0 70%, transparent 71%) center bottom / 24% 100% no-repeat,
+            linear-gradient(to top, currentColor 0 96%, transparent 97%) right bottom / 24% 100% no-repeat;
+        border-radius: 4px;
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-evolution::before {{
+        inset: 12px;
+        clip-path: polygon(7% 73%, 35% 73%, 35% 100%, 7% 100%, 7% 73%, 48% 60%, 68% 34%, 54% 34%, 54% 10%, 94% 10%, 94% 50%, 71% 50%, 71% 39%, 50% 68%, 7% 84%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-streak::before,
+    .capture-medal-icon-wrap.medal-icon-flame::before {{
+        inset: 9px 14px;
+        clip-path: polygon(53% 100%, 25% 91%, 10% 70%, 15% 45%, 38% 22%, 37% 0, 62% 24%, 70% 47%, 89% 35%, 90% 65%, 77% 87%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-shield::before {{
+        inset: 9px 13px;
+        clip-path: polygon(50% 0, 96% 17%, 86% 72%, 50% 100%, 14% 72%, 4% 17%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-trophy::before {{
+        inset: 10px 12px;
+        clip-path: polygon(25% 0, 75% 0, 75% 12%, 100% 12%, 92% 44%, 70% 54%, 60% 70%, 76% 70%, 76% 88%, 92% 88%, 92% 100%, 8% 100%, 8% 88%, 24% 88%, 24% 70%, 40% 70%, 30% 54%, 8% 44%, 0 12%, 25% 12%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-star::before {{
+        inset: 9px;
+        clip-path: polygon(50% 0, 63% 34%, 100% 36%, 70% 58%, 80% 96%, 50% 74%, 20% 96%, 30% 58%, 0 36%, 37% 34%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-diamond::before,
+    .capture-medal-icon-wrap.medal-icon-crystal::before {{
+        inset: 9px;
+        clip-path: polygon(25% 0, 75% 0, 100% 35%, 50% 100%, 0 35%);
+    }}
+
+    .capture-medal-icon-wrap.medal-icon-crown::before {{
+        inset: 12px 9px;
+        clip-path: polygon(0 28%, 24% 55%, 50% 0, 76% 55%, 100% 28%, 88% 83%, 12% 83%);
+    }}
+
     .capture-medal-icon-wrap.circle {{
         border-radius: 999px;
     }}
@@ -2571,14 +2669,14 @@ def inject_css():
 
     .capture-medal-icon-wrap svg {{
         display: block !important;
-        width: 34px;
-        height: 34px;
+        width: 38px;
+        height: 38px;
         visibility: visible !important;
         opacity: 1 !important;
         position: relative;
-        z-index: 5;
-        stroke: #f4c95d !important;
-        fill: none !important;
+        z-index: 6;
+        stroke: none !important;
+        fill: #f4c95d !important;
         overflow: visible;
         filter: drop-shadow(0 0 10px var(--medal-glow));
     }}
@@ -2586,28 +2684,28 @@ def inject_css():
     .capture-medal-icon-wrap svg * {{
         visibility: visible !important;
         opacity: 1 !important;
-        stroke: #f4c95d !important;
-        fill: none !important;
+        stroke: none !important;
+        fill: #f4c95d !important;
     }}
 
     .capture-medal-card.bronze .capture-medal-icon-wrap svg,
     .capture-medal-card.bronze .capture-medal-icon-wrap svg * {{
-        stroke: #f0c08a !important;
+        fill: #f0c08a !important;
     }}
 
     .capture-medal-card.silver .capture-medal-icon-wrap svg,
     .capture-medal-card.silver .capture-medal-icon-wrap svg * {{
-        stroke: #d7ebff !important;
+        fill: #d7ebff !important;
     }}
 
     .capture-medal-card.gold .capture-medal-icon-wrap svg,
     .capture-medal-card.gold .capture-medal-icon-wrap svg * {{
-        stroke: #f4c95d !important;
+        fill: #f4c95d !important;
     }}
 
     .capture-medal-card.platinum .capture-medal-icon-wrap svg,
     .capture-medal-card.platinum .capture-medal-icon-wrap svg * {{
-        stroke: #d7fff3 !important;
+        fill: #d7fff3 !important;
     }}
 
     .capture-medal-title {{
@@ -3145,8 +3243,8 @@ def inject_css():
         }}
 
         .capture-medal-icon-wrap svg {{
-            width: 29px;
-            height: 29px;
+            width: 34px;
+            height: 34px;
         }}
 
         .profile-identity {{
@@ -3934,85 +4032,87 @@ def format_signed_compact(value):
 def medal_icon_svg(icon_type):
     icons = {
         "target": """
-            <circle cx="12" cy="12" r="8"></circle>
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+            <circle cx="50" cy="50" r="34" opacity="0.28"></circle>
+            <circle cx="50" cy="50" r="22" opacity="0.58"></circle>
+            <circle cx="50" cy="50" r="9"></circle>
         """,
         "map": """
-            <path d="M8 5l-5 2v13l5-2 8 3 5-2V6l-5 2-8-3z"></path>
-            <path d="M8 5v13M16 8v13"></path>
+            <path d="M16 18l22-9 24 9 22-9v70l-22 9-24-9-22 9V18z" opacity="0.42"></path>
+            <path d="M38 9h8v70h-8zM62 18h8v70h-8z"></path>
         """,
         "bolt": """
-            <path d="M13 2L4 14h7l-1 8 9-13h-7l1-7z"></path>
+            <path d="M56 4L18 57h29l-7 39 43-59H54L56 4z"></path>
         """,
         "spark": """
-            <path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2z"></path>
-            <path d="M5 17l.7 2.3L8 20l-2.3.7L5 23l-.7-2.3L2 20l2.3-.7L5 17z"></path>
+            <path d="M50 4l9 32 33 9-33 9-9 32-9-32-33-9 33-9 9-32z"></path>
+            <path d="M18 70l4 12 12 4-12 4-4 12-4-12-12-4 12-4 4-12z" opacity="0.7"></path>
         """,
         "shine": """
-            <path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path>
-            <path d="M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"></path>
-            <circle cx="12" cy="12" r="2.5"></circle>
+            <rect x="46" y="5" width="8" height="25" rx="4"></rect>
+            <rect x="46" y="70" width="8" height="25" rx="4"></rect>
+            <rect x="5" y="46" width="25" height="8" rx="4"></rect>
+            <rect x="70" y="46" width="25" height="8" rx="4"></rect>
+            <circle cx="50" cy="50" r="12"></circle>
         """,
         "radar": """
-            <circle cx="12" cy="12" r="9"></circle>
-            <circle cx="12" cy="12" r="2"></circle>
-            <path d="M12 12l6-5M4 12a8 8 0 018-8M7 17a7 7 0 0010-10"></path>
+            <path d="M50 8a42 42 0 1042 42H78a28 28 0 11-28-28V8z" opacity="0.42"></path>
+            <path d="M50 24a26 26 0 1026 26H62a12 12 0 11-12-12V24z" opacity="0.72"></path>
+            <path d="M50 50l33-28 7 8-33 28z"></path>
+            <circle cx="50" cy="50" r="8"></circle>
         """,
         "orbit": """
-            <circle cx="12" cy="12" r="2.4"></circle>
-            <ellipse cx="12" cy="12" rx="9" ry="4.2" transform="rotate(24 12 12)"></ellipse>
-            <ellipse cx="12" cy="12" rx="9" ry="4.2" transform="rotate(-24 12 12)"></ellipse>
-            <circle cx="19" cy="9" r="1.4"></circle>
+            <ellipse cx="50" cy="50" rx="43" ry="16" transform="rotate(24 50 50)" opacity="0.34"></ellipse>
+            <ellipse cx="50" cy="50" rx="43" ry="16" transform="rotate(-24 50 50)" opacity="0.34"></ellipse>
+            <circle cx="50" cy="50" r="12"></circle>
+            <circle cx="78" cy="34" r="7"></circle>
         """,
         "chart": """
-            <path d="M4 19V5"></path>
-            <path d="M4 19h16"></path>
-            <path d="M7 15l4-4 3 3 5-7"></path>
-            <path d="M16 7h3v3"></path>
+            <rect x="14" y="57" width="12" height="29" rx="3"></rect>
+            <rect x="42" y="38" width="12" height="48" rx="3"></rect>
+            <rect x="70" y="18" width="12" height="68" rx="3"></rect>
+            <path d="M14 44l28-22 20 12 24-25v19l-22 21-20-12-30 24V44z" opacity="0.48"></path>
         """,
         "evolution": """
-            <path d="M4 17c4 0 7-2 8-6"></path>
-            <path d="M12 11l-1-4 4 1"></path>
-            <path d="M6 7h4v4H6z"></path>
-            <path d="M14 14h5v5h-5z"></path>
+            <rect x="12" y="58" width="22" height="22" rx="4" opacity="0.72"></rect>
+            <rect x="64" y="20" width="24" height="24" rx="5"></rect>
+            <path d="M31 55c17-5 27-16 35-34h-15V9h36v36H75V30c-10 20-24 33-44 40V55z"></path>
         """,
         "streak": """
-            <path d="M5 18c2-6 5-5 6-11 3 2 5 5 3 9 1-1 2-2 4-2-.2 4-3 7-7 7-3 0-5-1-6-3z"></path>
-            <path d="M11 21c-1.5-2-.2-3.5 1.2-5 1.8 1.8 2.4 3.6.8 5"></path>
+            <path d="M50 96c24-10 32-30 24-48-8 7-15 6-15-5 0-14-9-26-23-37 4 21-18 31-18 56 0 17 13 29 32 34z"></path>
+            <path d="M50 82c10-5 14-14 9-23-4 4-9 4-9-3 0-7-4-12-10-18 1 13-9 20-9 32 0 8 8 13 19 12z" opacity="0.62"></path>
         """,
         "shield": """
-            <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"></path>
-            <path d="M9 12l2 2 4-5"></path>
+            <path d="M50 6l36 14v25c0 25-14 40-36 49-22-9-36-24-36-49V20L50 6z"></path>
+            <path d="M31 48l13 13 27-31v19L45 76 31 62V48z" opacity="0.55"></path>
         """,
         "trophy": """
-            <path d="M8 4h8v5a4 4 0 01-8 0V4z"></path>
-            <path d="M8 6H4v2a4 4 0 004 4M16 6h4v2a4 4 0 01-4 4"></path>
-            <path d="M12 13v5M8 21h8M10 18h4"></path>
+            <path d="M30 10h40v24c0 15-9 26-20 26S30 49 30 34V10z"></path>
+            <path d="M18 17h12v12c0 10-5 17-14 19-4-20 2-31 2-31zM70 17h12s6 11 2 31c-9-2-14-9-14-19V17z" opacity="0.62"></path>
+            <path d="M43 60h14v17h17v13H26V77h17V60z"></path>
         """,
         "flame": """
-            <path d="M12 22c4 0 7-3 7-7 0-3-2-5-4-7 .2 2-.7 3.2-2 4-1-4-4-6-4-6 .4 4-4 6-4 10 0 4 3 6 7 6z"></path>
-            <path d="M12 18c1.7 0 3-1.2 3-3 0-1.2-.7-2.1-1.7-3-.1 1-.6 1.7-1.3 2.2-.5-1.4-1.6-2.4-1.6-2.4.2 2-1.4 3-1.4 4.4 0 1.1 1.1 1.8 3 1.8z"></path>
+            <path d="M51 96c25-8 35-26 29-46-6 8-14 10-19 6 4-17-8-35-27-50 4 27-18 32-18 59 0 20 16 30 35 31z"></path>
+            <path d="M51 82c10-4 16-12 13-23-4 5-10 6-13 2 1-9-4-17-14-25 2 15-8 21-8 34 0 9 8 13 22 12z" opacity="0.58"></path>
         """,
         "star": """
-            <path d="M12 2l2.8 6 6.2.8-4.5 4.4 1.2 6.3L12 16.4 6.3 19.5l1.2-6.3L3 8.8 9.2 8 12 2z"></path>
+            <path d="M50 5l13 29 32 4-24 22 7 32-28-17-28 17 7-32L5 38l32-4L50 5z"></path>
         """,
         "diamond": """
-            <path d="M6 3h12l4 6-10 12L2 9l4-6z"></path>
-            <path d="M2 9h20M8 3l-2 6 6 12 6-12-2-6"></path>
+            <path d="M25 8h50l18 28-43 58L7 36 25 8z"></path>
+            <path d="M7 36h86L50 94 7 36z" opacity="0.38"></path>
         """,
         "crystal": """
-            <path d="M12 2l7 5-2 12-5 3-5-3L5 7l7-5z"></path>
-            <path d="M5 7h14M9 7l3 15 3-15M12 2v5"></path>
+            <path d="M50 4l31 22-9 54-22 16-22-16-9-54L50 4z"></path>
+            <path d="M19 26h62L50 96 19 26z" opacity="0.36"></path>
         """,
         "crown": """
-            <path d="M3 8l4 4 5-8 5 8 4-4-2 11H5L3 8z"></path>
-            <path d="M5 19h14"></path>
+            <path d="M8 28l20 20 22-38 22 38 20-20-10 50H18L8 28z"></path>
+            <rect x="18" y="78" width="64" height="12" rx="4"></rect>
         """,
     }
     paths = icons.get(icon_type, icons["target"])
     return f"""
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="#f4c95d" fill="none" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="display:block !important;width:34px !important;height:34px !important;stroke:#f4c95d !important;fill:none !important;visibility:visible !important;opacity:1 !important;position:relative;z-index:5;overflow:visible;" aria-hidden="true">
+        <svg class="medal-solid-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#f4c95d" stroke="none" style="display:block !important;width:38px !important;height:38px !important;fill:#f4c95d !important;stroke:none !important;visibility:visible !important;opacity:1 !important;position:relative;z-index:6;overflow:visible;" aria-hidden="true">
             {paths}
         </svg>
     """
@@ -4071,7 +4171,7 @@ def render_capture_medals_section(total_captures):
         cards.append(f"""
             <article class="capture-medal-card {escape(medal['tier'])} {escape(status)}{latest_class}" title="{escape(medal['title'])}">
                 {lock_html}
-                <div class="capture-medal-icon-wrap {escape(medal['shape_type'])}">
+                <div class="capture-medal-icon-wrap {escape(medal['shape_type'])} medal-icon-{escape(medal['icon_type'])}">
                     {medal_icon_svg(medal['icon_type'])}
                 </div>
                 <div class="capture-medal-title">{escape(medal['title'])}</div>
