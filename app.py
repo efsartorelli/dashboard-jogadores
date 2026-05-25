@@ -14,6 +14,7 @@ from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
 from src.metrics.formatting import format_compact, format_int
+from src.metrics.medals import CAPTURE_MEDAL_COUNT, calculate_medal_progress
 from src.metrics.rankings import build_general_ranking as compute_general_ranking
 from src.metrics.rankings import get_best_catches as compute_best_catches
 from src.metrics.states import build_state_stats as compute_state_stats
@@ -2355,6 +2356,255 @@ def inject_css():
         line-height: 1.35;
     }}
 
+    .capture-medals-section {{
+        margin: 1rem 0;
+        border: 1px solid var(--rb-border);
+        border-radius: var(--rb-radius-lg);
+        padding: clamp(0.95rem, 2vw, 1.25rem);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(244,201,93,0.11), transparent 18rem),
+            radial-gradient(circle at 90% 12%, rgba(76,201,176,0.10), transparent 16rem),
+            linear-gradient(150deg, rgba(19,27,36,0.82), rgba(9,14,20,0.56));
+        box-shadow: 0 18px 54px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04);
+    }}
+
+    .capture-medals-top {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+        gap: 1rem;
+        align-items: stretch;
+    }}
+
+    .capture-medals-title {{
+        margin: 0.34rem 0 0.35rem;
+        color: var(--rb-text);
+        font-size: clamp(1.35rem, 3vw, 2.1rem);
+        line-height: 1.05;
+        font-weight: 950;
+    }}
+
+    .capture-medals-copy {{
+        max-width: 680px;
+        margin: 0;
+        color: var(--rb-muted);
+        line-height: 1.52;
+        font-size: 0.92rem;
+    }}
+
+    .capture-medals-summary {{
+        border: 1px solid rgba(244,201,93,0.22);
+        border-radius: var(--rb-radius-md);
+        padding: 0.9rem;
+        background: rgba(255,255,255,0.035);
+    }}
+
+    .capture-medals-count {{
+        color: var(--rb-text);
+        font-size: clamp(1.55rem, 4vw, 2.35rem);
+        line-height: 1;
+        font-weight: 950;
+    }}
+
+    .capture-medals-count span {{
+        color: var(--rb-gold);
+    }}
+
+    .capture-next {{
+        margin-top: 0.72rem;
+        color: var(--rb-muted);
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }}
+
+    .capture-next strong {{
+        color: var(--rb-text);
+    }}
+
+    .capture-medal-progress {{
+        height: 10px;
+        margin-top: 0.7rem;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.07);
+    }}
+
+    .capture-medal-progress > div {{
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--rb-green), var(--rb-gold));
+        box-shadow: 0 0 24px rgba(244,201,93,0.20);
+        transition: width 360ms ease;
+    }}
+
+    .capture-medal-grid {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+        gap: 0.72rem;
+        margin-top: 1rem;
+    }}
+
+    .capture-medal-card {{
+        position: relative;
+        min-height: 184px;
+        padding: 0.82rem;
+        border: 1px solid var(--medal-border);
+        border-radius: var(--rb-radius-md);
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 50% -20%, var(--medal-glow), transparent 8rem),
+            linear-gradient(155deg, rgba(255,255,255,0.052), rgba(255,255,255,0.018));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 34px rgba(0,0,0,0.18);
+    }}
+
+    .capture-medal-card.unlocked {{
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 42px rgba(0,0,0,0.22), 0 0 22px var(--medal-glow);
+    }}
+
+    .capture-medal-card.current {{
+        border-color: rgba(244,201,93,0.66);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 16px 44px rgba(0,0,0,0.24), 0 0 30px rgba(244,201,93,0.14);
+        animation: medal-current-glow 2.4s ease-in-out infinite;
+    }}
+
+    .capture-medal-card.locked {{
+        filter: grayscale(0.75);
+        opacity: 0.62;
+    }}
+
+    .capture-medal-card.latest::after {{
+        content: "Ultima";
+        position: absolute;
+        top: 0.58rem;
+        right: 0.58rem;
+        border: 1px solid rgba(244,201,93,0.32);
+        border-radius: 999px;
+        padding: 0.18rem 0.42rem;
+        color: var(--rb-gold);
+        background: rgba(244,201,93,0.08);
+        font-size: 0.58rem;
+        font-weight: 920;
+    }}
+
+    .capture-medal-card.bronze {{
+        --medal-main: #d7955b;
+        --medal-soft: #f0c08a;
+        --medal-fill: rgba(215,149,91,0.20);
+        --medal-border: rgba(215,149,91,0.32);
+        --medal-glow: rgba(215,149,91,0.16);
+    }}
+
+    .capture-medal-card.silver {{
+        --medal-main: #91b7d9;
+        --medal-soft: #d7ebff;
+        --medal-fill: rgba(145,183,217,0.20);
+        --medal-border: rgba(145,183,217,0.34);
+        --medal-glow: rgba(91,166,224,0.16);
+    }}
+
+    .capture-medal-card.gold {{
+        --medal-main: #f4c95d;
+        --medal-soft: #ffe6a3;
+        --medal-fill: rgba(244,201,93,0.20);
+        --medal-border: rgba(244,201,93,0.38);
+        --medal-glow: rgba(244,201,93,0.18);
+    }}
+
+    .capture-medal-card.platinum {{
+        --medal-main: #62f0c8;
+        --medal-soft: #d7fff3;
+        --medal-fill: rgba(98,240,200,0.20);
+        --medal-border: rgba(98,240,200,0.38);
+        --medal-glow: rgba(98,240,200,0.18);
+    }}
+
+    .capture-medal-icon-wrap {{
+        width: 58px;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.68rem;
+        color: var(--medal-soft);
+        background: linear-gradient(145deg, var(--medal-fill), rgba(255,255,255,0.04));
+        border: 1px solid var(--medal-border);
+        box-shadow: 0 0 24px var(--medal-glow);
+    }}
+
+    .capture-medal-icon-wrap.circle {{
+        border-radius: 999px;
+    }}
+
+    .capture-medal-icon-wrap.hexagon {{
+        clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+    }}
+
+    .capture-medal-icon-wrap.shield {{
+        clip-path: polygon(50% 0, 93% 16%, 84% 74%, 50% 100%, 16% 74%, 7% 16%);
+    }}
+
+    .capture-medal-icon-wrap.diamond {{
+        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    }}
+
+    .capture-medal-icon-wrap svg {{
+        display: block !important;
+        width: 32px;
+        height: 32px;
+        visibility: visible !important;
+        opacity: 1 !important;
+        stroke: currentColor !important;
+        fill: none !important;
+        overflow: visible;
+        filter: drop-shadow(0 0 10px var(--medal-glow));
+    }}
+
+    .capture-medal-title {{
+        color: var(--rb-text);
+        font-size: 0.88rem;
+        font-weight: 930;
+        line-height: 1.15;
+        min-height: 2.05em;
+    }}
+
+    .capture-medal-threshold {{
+        margin-top: 0.34rem;
+        color: var(--medal-soft);
+        font-size: 0.78rem;
+        font-weight: 900;
+    }}
+
+    .capture-medal-description {{
+        margin-top: 0.36rem;
+        color: var(--rb-muted);
+        font-size: 0.74rem;
+        line-height: 1.34;
+    }}
+
+    .capture-medal-status {{
+        display: inline-flex;
+        width: fit-content;
+        margin-top: 0.58rem;
+        border: 1px solid var(--medal-border);
+        border-radius: 999px;
+        padding: 0.18rem 0.42rem;
+        color: var(--medal-soft);
+        background: rgba(255,255,255,0.035);
+        font-size: 0.63rem;
+        font-weight: 900;
+    }}
+
+    .capture-medal-lock {{
+        position: absolute;
+        top: 0.62rem;
+        right: 0.62rem;
+        color: rgba(240,239,255,0.58);
+    }}
+
+    @keyframes medal-current-glow {{
+        0%, 100% {{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 16px 44px rgba(0,0,0,0.24), 0 0 20px rgba(244,201,93,0.11); }}
+        50% {{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 16px 44px rgba(0,0,0,0.24), 0 0 34px rgba(244,201,93,0.22); }}
+    }}
+
     .activity-list {{
         display: grid;
         gap: 0.55rem;
@@ -2747,8 +2997,18 @@ def inject_css():
 
         .profile-hero-modern,
         .premium-hero-modern,
+        .capture-medals-top,
         .pricing-grid {{
             grid-template-columns: 1fr;
+        }}
+
+        .capture-medal-grid {{
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }}
+
+        .capture-medal-card {{
+            min-height: 174px;
+            padding: 0.72rem;
         }}
 
         .readiness-grid {{
@@ -2808,9 +3068,38 @@ def inject_css():
         .profile-metric-grid,
         .premium-grid,
         .achievement-grid,
+        .capture-medal-grid,
         .readiness-grid,
         .skeleton-grid {{
             grid-template-columns: 1fr;
+        }}
+
+        .capture-medals-section {{
+            padding: 0.86rem;
+            border-radius: 20px;
+        }}
+
+        .capture-medals-summary {{
+            padding: 0.78rem;
+        }}
+
+        .capture-medal-grid {{
+            gap: 0.62rem;
+        }}
+
+        .capture-medal-card {{
+            min-height: 166px;
+        }}
+
+        .capture-medal-icon-wrap {{
+            width: 52px;
+            height: 52px;
+            margin-bottom: 0.55rem;
+        }}
+
+        .capture-medal-icon-wrap svg {{
+            width: 29px;
+            height: 29px;
         }}
 
         .profile-identity {{
@@ -3595,6 +3884,153 @@ def format_signed_compact(value):
     return f"{prefix}{format_compact(value)}"
 
 
+def medal_icon_svg(icon_type):
+    icons = {
+        "target": """
+            <circle cx="12" cy="12" r="8"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+        """,
+        "map": """
+            <path d="M8 5l-5 2v13l5-2 8 3 5-2V6l-5 2-8-3z"></path>
+            <path d="M8 5v13M16 8v13"></path>
+        """,
+        "bolt": """
+            <path d="M13 2L4 14h7l-1 8 9-13h-7l1-7z"></path>
+        """,
+        "spark": """
+            <path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2z"></path>
+            <path d="M5 17l.7 2.3L8 20l-2.3.7L5 23l-.7-2.3L2 20l2.3-.7L5 17z"></path>
+        """,
+        "radar": """
+            <circle cx="12" cy="12" r="9"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+            <path d="M12 12l6-5M4 12a8 8 0 018-8M7 17a7 7 0 0010-10"></path>
+        """,
+        "chart": """
+            <path d="M4 19V5"></path>
+            <path d="M4 19h16"></path>
+            <path d="M7 15l4-4 3 3 5-7"></path>
+            <path d="M16 7h3v3"></path>
+        """,
+        "shield": """
+            <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"></path>
+            <path d="M9 12l2 2 4-5"></path>
+        """,
+        "trophy": """
+            <path d="M8 4h8v5a4 4 0 01-8 0V4z"></path>
+            <path d="M8 6H4v2a4 4 0 004 4M16 6h4v2a4 4 0 01-4 4"></path>
+            <path d="M12 13v5M8 21h8M10 18h4"></path>
+        """,
+        "flame": """
+            <path d="M12 22c4 0 7-3 7-7 0-3-2-5-4-7 .2 2-.7 3.2-2 4-1-4-4-6-4-6 .4 4-4 6-4 10 0 4 3 6 7 6z"></path>
+            <path d="M12 18c1.7 0 3-1.2 3-3 0-1.2-.7-2.1-1.7-3-.1 1-.6 1.7-1.3 2.2-.5-1.4-1.6-2.4-1.6-2.4.2 2-1.4 3-1.4 4.4 0 1.1 1.1 1.8 3 1.8z"></path>
+        """,
+        "star": """
+            <path d="M12 2l2.8 6 6.2.8-4.5 4.4 1.2 6.3L12 16.4 6.3 19.5l1.2-6.3L3 8.8 9.2 8 12 2z"></path>
+        """,
+        "diamond": """
+            <path d="M6 3h12l4 6-10 12L2 9l4-6z"></path>
+            <path d="M2 9h20M8 3l-2 6 6 12 6-12-2-6"></path>
+        """,
+        "crown": """
+            <path d="M3 8l4 4 5-8 5 8 4-4-2 11H5L3 8z"></path>
+            <path d="M5 19h14"></path>
+        """,
+    }
+    paths = icons.get(icon_type, icons["target"])
+    return f"""
+        <svg viewBox="0 0 24 24" style="display:block;width:32px;height:32px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" aria-hidden="true">
+            {paths}
+        </svg>
+    """
+
+
+def lock_icon_svg():
+    return """
+        <svg viewBox="0 0 24 24" style="display:block;width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" aria-hidden="true">
+            <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+            <path d="M8 10V7a4 4 0 018 0v3"></path>
+        </svg>
+    """
+
+
+def render_capture_medals_section(total_captures):
+    progress = calculate_medal_progress(total_captures)
+    total = progress["total_captures"]
+    if total <= 0:
+        ui_html("""
+            <section class="capture-medals-section">
+                <div class="section-kicker">Capturas</div>
+                <h2 class="capture-medals-title">Medalhas de Captura</h2>
+                <div class="empty-state compact">Dados de capturas ainda nao disponiveis para este perfil.</div>
+            </section>
+        """)
+        return
+
+    next_medal = progress["next_medal"]
+    if next_medal:
+        next_html = f"""
+            <div class="capture-next">
+                Proxima medalha:<br>
+                <strong>{format_int(next_medal['threshold'])} capturas</strong><br>
+                Faltam {format_int(progress['missing_to_next'])} capturas
+            </div>
+        """
+    else:
+        next_html = """
+            <div class="capture-next">
+                Colecao completa:<br>
+                <strong>35 medalhas desbloqueadas</strong><br>
+                Novos marcos podem ser adicionados no futuro
+            </div>
+        """
+
+    status_labels = {
+        "unlocked": "Desbloqueada",
+        "current": "Em progresso",
+        "locked": "Bloqueada",
+    }
+    cards = []
+    for medal in progress["medals"]:
+        status = medal["status"]
+        latest_class = " latest" if medal.get("is_latest") else ""
+        lock_html = f'<div class="capture-medal-lock">{lock_icon_svg()}</div>' if status == "locked" else ""
+        cards.append(f"""
+            <article class="capture-medal-card {escape(medal['tier'])} {escape(status)}{latest_class}" title="{escape(medal['description'])}">
+                {lock_html}
+                <div class="capture-medal-icon-wrap {escape(medal['shape_type'])}">
+                    {medal_icon_svg(medal['icon_type'])}
+                </div>
+                <div class="capture-medal-title">{escape(medal['title'])}</div>
+                <div class="capture-medal-threshold">{format_int(medal['threshold'])} capturas</div>
+                <div class="capture-medal-description">{escape(medal['description'])}</div>
+                <div class="capture-medal-status">{status_labels[status]}</div>
+            </article>
+        """)
+
+    ui_html(f"""
+        <section class="capture-medals-section">
+            <div class="capture-medals-top">
+                <div>
+                    <div class="section-kicker">Capturas</div>
+                    <h2 class="capture-medals-title">Medalhas de Captura</h2>
+                    <p class="capture-medals-copy">
+                        Marcos desbloqueados a cada 100.000 capturas. A proxima medalha acompanha o progresso atual do jogador.
+                    </p>
+                </div>
+                <div class="capture-medals-summary">
+                    <div class="capture-medals-count"><span>{progress['unlocked_count']}</span>/{CAPTURE_MEDAL_COUNT}</div>
+                    <div class="profile-location">desbloqueadas</div>
+                    {next_html}
+                    <div class="capture-medal-progress"><div style="width:{progress['progress_pct']}%"></div></div>
+                </div>
+            </div>
+            <div class="capture-medal-grid">{"".join(cards)}</div>
+        </section>
+    """)
+
+
 def get_query_param_value(name):
     value = st.query_params.get(name, "")
     if isinstance(value, list):
@@ -3892,6 +4328,8 @@ def render_public_player_profile(public_profile, dashboard_data):
             </article>
         </div>
     """)
+
+    render_capture_medals_section(insights["latest_catches"])
 
     history = insights["history"]
     if isinstance(history, pd.DataFrame) and len(history) >= 2:
@@ -4247,6 +4685,8 @@ def render_profile_page(profile, session: AuthSession):
             </article>
         </div>
     """)
+
+    render_capture_medals_section(insights["latest_catches"])
 
     tab_names = ["Resumo", "Editar perfil", "Enviar dados", "Historico", "Sessao"]
     tabs = st.tabs(tab_names)

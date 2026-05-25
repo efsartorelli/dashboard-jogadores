@@ -3,6 +3,7 @@ import unittest
 from src.data.loaders import load_excel_data
 from src.metrics.averages import build_average_ranking, calculate_daily_averages
 from src.metrics.distribution import build_distribution
+from src.metrics.medals import CAPTURE_MEDAL_COUNT, build_capture_medals, calculate_medal_progress
 from src.metrics.rankings import build_general_ranking, get_best_catches
 from src.metrics.states import build_state_stats
 
@@ -50,6 +51,25 @@ class MetricsRegressionTest(unittest.TestCase):
         distribution = build_distribution(self.base)
         self.assertEqual(distribution.set_index("Faixa").loc["1M+", "Jogadores"], 15)
         self.assertEqual(distribution.set_index("Faixa").loc["2M+", "Jogadores"], 3)
+
+    def test_capture_medals_progression(self):
+        medals = build_capture_medals()
+        self.assertEqual(CAPTURE_MEDAL_COUNT, 35)
+        self.assertEqual(len(medals), 35)
+        self.assertEqual(medals[0]["threshold"], 100_000)
+        self.assertEqual(medals[-1]["threshold"], 3_500_000)
+
+        progress = calculate_medal_progress(850_000)
+        self.assertEqual(progress["unlocked_count"], 8)
+        self.assertEqual(progress["next_medal"]["threshold"], 900_000)
+        self.assertEqual(progress["missing_to_next"], 50_000)
+        self.assertEqual(progress["medals"][7]["status"], "unlocked")
+        self.assertEqual(progress["medals"][8]["status"], "current")
+
+        complete = calculate_medal_progress(3_500_000)
+        self.assertEqual(complete["unlocked_count"], 35)
+        self.assertIsNone(complete["next_medal"])
+        self.assertEqual(complete["progress_pct"], 100)
 
 
 if __name__ == "__main__":
