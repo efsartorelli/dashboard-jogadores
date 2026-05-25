@@ -660,35 +660,24 @@ def render_admin_page(profile):
 
 
 def trainer_avatar(name, place):
-    accents = {
-        1: ("#f4d77b", "#4cc9b0"),
-        2: ("#e8ebff", "#8fa7ff"),
-        3: ("#f0c3a9", "#e2b84f"),
-    }
-    stroke_color, accent_color = accents.get(place, accents[2])
-
+    # SVG inline rendered inside .podium-avatar; CSS also adds an embedded SVG fallback span for Streamlit-safe visibility.
     return f"""
         <svg
             class="trainer-avatar-svg"
             xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 120 120"
+            viewBox="0 0 24 24"
+            style="display:block; width:42px; height:42px; stroke:#f4c95d; fill:none; overflow:visible;"
             role="img"
             aria-label="Avatar de treinador"
+            fill="none"
+            stroke="#f4c95d"
+            stroke-width="2.3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
         >
-            <circle cx="60" cy="60" r="56" fill="rgba(8,13,18,0.45)" stroke="{stroke_color}" stroke-width="2.4" opacity="0.72" />
-            <circle cx="60" cy="44" r="19" fill="rgba(244,215,123,0.16)" stroke="{stroke_color}" stroke-width="4.2" />
-            <circle cx="60" cy="44" r="10.5" fill="{stroke_color}" opacity="0.18" />
-            <path
-                fill="none"
-                stroke="{stroke_color}"
-                stroke-width="5.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M28 98c4.8-22.4 17.2-34.5 32-34.5S87.2 75.6 92 98"
-            />
-            <path d="M38 94c6.3-12.4 13.6-18.4 22-18.4S75.7 81.6 82 94" fill="{accent_color}" opacity="0.20" />
-            <path d="M46 91h28" stroke="rgba(255,255,255,0.42)" stroke-width="3" stroke-linecap="round" />
-            <circle cx="60" cy="44" r="3.2" fill="rgba(255,255,255,0.72)" />
+            <circle cx="12" cy="8" r="4.2" />
+            <path d="M4.5 21c1.15-5.15 4.05-7.75 7.5-7.75S18.35 15.85 19.5 21" />
+            <path d="M8.4 19.1h7.2" />
         </svg>
     """
 
@@ -1006,13 +995,14 @@ def inject_css():
 
     .stat-icon {{
         position: relative;
-        z-index: 1;
+        z-index: 5;
         color: var(--rb-gold);
         width: 54px;
         height: 54px;
         margin-bottom: 1rem;
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border-radius: 20px;
         border: 1px solid rgba(226,184,79,0.28);
         background:
@@ -1026,12 +1016,46 @@ def inject_css():
     }}
 
     .stat-icon svg {{
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
         position: relative;
-        z-index: 1;
+        z-index: 10;
         width: 34px;
         height: 34px;
-        display: block;
-        filter: drop-shadow(0 0 10px rgba(226,184,79,0.20));
+        overflow: visible !important;
+        stroke: #f4c95d !important;
+        fill: none !important;
+    }}
+
+    .stat-icon-fallback,
+    .podium-avatar-fallback {{
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: absolute;
+        z-index: 9;
+        pointer-events: none;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+    }}
+
+    .stat-icon-fallback {{
+        width: 32px;
+        height: 32px;
+    }}
+
+    .stat-icon-users-fallback {{
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f4c95d' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H7.4A4.4 4.4 0 0 0 3 19.4V21'/%3E%3Ccircle cx='9.5' cy='7.4' r='3.7'/%3E%3Cpath d='M21 21v-1.4a3.8 3.8 0 0 0-3.1-3.7'/%3E%3Cpath d='M16.2 4.1a3.55 3.55 0 0 1 0 6.8'/%3E%3Cpath d='M4.8 19.5h9.4'/%3E%3C/svg%3E");
+    }}
+
+    .stat-icon-chart-fallback {{
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f4c95d' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 19V5'/%3E%3Cpath d='M4 19h16'/%3E%3Cpath d='M8 15v-4'/%3E%3Cpath d='M12 15V8'/%3E%3Cpath d='M16 15v-6'/%3E%3Cpath d='M7.2 7.7 10 5l3 2 4-4'/%3E%3Cpath d='M16.7 3H20v3.3'/%3E%3C/svg%3E");
+    }}
+
+    .stat-icon-map-fallback {{
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f4c95d' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11z'/%3E%3Ccircle cx='12' cy='10' r='2.35'/%3E%3Cpath d='M4.5 20.2c1.5-1 3.2-1.5 5.1-1.5'/%3E%3Cpath d='M14.4 18.7c1.9 0 3.6.5 5.1 1.5'/%3E%3C/svg%3E");
     }}
 
     .stat-card:hover .stat-icon {{
@@ -1211,8 +1235,9 @@ def inject_css():
         width: 92px;
         height: 92px;
         margin: 0.05rem auto 0.78rem;
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border-radius: 50%;
         border: 3px solid rgba(226,184,79,0.68);
         background:
@@ -1224,14 +1249,26 @@ def inject_css():
             inset 0 1px 0 rgba(255,255,255,0.18);
         overflow: hidden;
         position: relative;
-        z-index: 1;
+        z-index: 5;
     }}
 
     .podium-avatar svg {{
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative;
+        z-index: 10;
         width: 44px;
         height: 44px;
-        display: block;
-        filter: drop-shadow(0 0 16px rgba(226,184,79,0.22));
+        overflow: visible !important;
+        stroke: #f4c95d !important;
+        fill: none !important;
+    }}
+
+    .podium-avatar-fallback {{
+        width: 42px;
+        height: 42px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f4c95d' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4.2'/%3E%3Cpath d='M4.5 21c1.15-5.15 4.05-7.75 7.5-7.75S18.35 15.85 19.5 21'/%3E%3Cpath d='M8.4 19.1h7.2'/%3E%3C/svg%3E");
     }}
 
     .champion .podium-avatar {{
@@ -2785,6 +2822,7 @@ def render_hero(base, historical_data):
     capturas = historical_data["catches"].sum()
     estados = base["state"].nunique()
 
+    # Inline SVGs keep the stat icons visible in Streamlit's generated HTML; CSS below forces display, stroke and z-index.
     ui_html(f"""
         <section id="dashboard" class="hero section-anchor">
             <div class="hero-grid">
@@ -2804,12 +2842,13 @@ def render_hero(base, historical_data):
                 <div class="hero-stat-grid">
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f4d77b" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round">
+                            <span class="stat-icon-fallback stat-icon-users-fallback"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" style="display:block; width:32px; height:32px; stroke:#f4c95d; fill:none; overflow:visible;" fill="none" stroke="#f4c95d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M16 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H7.4A4.4 4.4 0 0 0 3 19.4V21" />
-                                <circle cx="9.5" cy="7.4" r="3.7" fill="rgba(244,215,123,0.16)" />
-                                <path d="M21 21v-1.4a3.8 3.8 0 0 0-3.1-3.7" stroke="#cfeee8" opacity="0.9" />
-                                <path d="M16.2 4.1a3.55 3.55 0 0 1 0 6.8" stroke="#cfeee8" opacity="0.9" />
-                                <path d="M4.8 19.5h9.4" stroke="#ffffff" opacity="0.42" />
+                                <circle cx="9.5" cy="7.4" r="3.7" />
+                                <path d="M21 21v-1.4a3.8 3.8 0 0 0-3.1-3.7" />
+                                <path d="M16.2 4.1a3.55 3.55 0 0 1 0 6.8" />
+                                <path d="M4.8 19.5h9.4" />
                             </svg>
                         </div>
                         <div class="stat-label">Jogadores monitorados</div>
@@ -2817,15 +2856,15 @@ def render_hero(base, historical_data):
                     </article>
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f4d77b" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round">
+                            <span class="stat-icon-fallback stat-icon-chart-fallback"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" style="display:block; width:32px; height:32px; stroke:#f4c95d; fill:none; overflow:visible;" fill="none" stroke="#f4c95d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M4 19V5" />
                                 <path d="M4 19h16" />
-                                <path d="M8 15v-4" stroke="#cfeee8" />
-                                <path d="M12 15V8" stroke="#cfeee8" />
-                                <path d="M16 15v-6" stroke="#cfeee8" />
+                                <path d="M8 15v-4" />
+                                <path d="M12 15V8" />
+                                <path d="M16 15v-6" />
                                 <path d="M7.2 7.7 10 5l3 2 4-4" />
                                 <path d="M16.7 3H20v3.3" />
-                                <circle cx="18.8" cy="4.2" r="1.35" fill="#f4d77b" stroke="none" />
                             </svg>
                         </div>
                         <div class="stat-label">Capturas analisadas</div>
@@ -2833,11 +2872,12 @@ def render_hero(base, historical_data):
                     </article>
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f4d77b" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11z" fill="rgba(244,215,123,0.12)" />
-                                <circle cx="12" cy="10" r="2.35" fill="#cfeee8" stroke="#cfeee8" />
-                                <path d="M4.5 20.2c1.5-1 3.2-1.5 5.1-1.5" stroke="#ffffff" opacity="0.48" />
-                                <path d="M14.4 18.7c1.9 0 3.6.5 5.1 1.5" stroke="#ffffff" opacity="0.48" />
+                            <span class="stat-icon-fallback stat-icon-map-fallback"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" style="display:block; width:32px; height:32px; stroke:#f4c95d; fill:none; overflow:visible;" fill="none" stroke="#f4c95d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11z" />
+                                <circle cx="12" cy="10" r="2.35" />
+                                <path d="M4.5 20.2c1.5-1 3.2-1.5 5.1-1.5" />
+                                <path d="M14.4 18.7c1.9 0 3.6.5 5.1 1.5" />
                             </svg>
                         </div>
                         <div class="stat-label">Estados representados</div>
@@ -2865,7 +2905,7 @@ def podium_card(row, place):
         <article class="{class_name}">
             {crown}
             <div class="podium-medal">{medal_labels[place]}</div>
-            <div class="podium-avatar">{avatar}</div>
+            <div class="podium-avatar"><span class="podium-avatar-fallback"></span>{avatar}</div>
             <div class="podium-name">{escape(str(row["nickname"]))}</div>
             <div class="podium-state">{escape(str(row["state"]))}</div>
             <div class="podium-catches">{format_int(row["catches"])}</div>
