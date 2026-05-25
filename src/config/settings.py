@@ -36,11 +36,16 @@ def _streamlit_secret(key: str) -> Any | None:
     try:
         import streamlit as st
 
-        if key in st.secrets:
-            return st.secrets[key]
+        secrets = dict(st.secrets)
+    except (KeyError, FileNotFoundError, RuntimeError, AttributeError, TypeError):
+        return None
     except Exception:
         return None
-    return None
+
+    try:
+        return secrets.get(key)
+    except Exception:
+        return None
 
 
 def _clean_value(value: Any) -> str | None:

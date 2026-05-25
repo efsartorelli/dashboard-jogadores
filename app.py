@@ -62,10 +62,10 @@ class FallbackSettingsValidation:
 
 def fallback_get_setting(key, default=None):
     try:
-        if key in st.secrets:
-            value = str(st.secrets[key]).strip()
-            if value:
-                return value
+        secrets = dict(st.secrets)
+        value = str(secrets.get(key, "")).strip()
+        if value:
+            return value
     except Exception:
         pass
     value = str(os.getenv(key, "")).strip()
@@ -1741,6 +1741,193 @@ def inject_css():
         font-size: 0.74rem;
         line-height: 1.35;
         overflow-wrap: anywhere;
+    }}
+
+    .desktop-ranking-wrap {{
+        width: 100%;
+        overflow: hidden;
+        margin-top: 0.82rem;
+        border: 1px solid rgba(240,218,159,0.16);
+        border-radius: 20px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(226,184,79,0.08), transparent 17rem),
+            radial-gradient(circle at 100% 0%, rgba(76,201,176,0.045), transparent 18rem),
+            linear-gradient(180deg, rgba(18,20,15,0.82), rgba(7,10,8,0.58));
+        box-shadow:
+            0 16px 44px rgba(0,0,0,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.045);
+    }}
+
+    .desktop-ranking-table {{
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        color: var(--rb-text);
+        table-layout: fixed;
+        font-variant-numeric: tabular-nums;
+    }}
+
+    .desktop-ranking-table th {{
+        padding: 0.98rem 0.9rem;
+        color: rgba(220,231,231,0.76);
+        text-align: left;
+        font-size: 0.66rem;
+        font-weight: 940;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(240,218,159,0.16);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)),
+            rgba(226,184,79,0.025);
+    }}
+
+    .desktop-ranking-table th + th,
+    .desktop-ranking-table td + td {{
+        border-left: 1px solid rgba(240,218,159,0.055);
+    }}
+
+    .desktop-ranking-table td {{
+        padding: 0.98rem 0.9rem;
+        border-bottom: 1px solid rgba(240,218,159,0.095);
+        vertical-align: middle;
+        font-size: 0.88rem;
+        line-height: 1.34;
+    }}
+
+    .desktop-ranking-table tr:last-child td {{
+        border-bottom: 0;
+    }}
+
+    .desktop-ranking-table tbody tr {{
+        background: rgba(255,255,255,0.018);
+        transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+    }}
+
+    .desktop-ranking-table tbody tr:nth-child(even) {{
+        background: rgba(255,255,255,0.035);
+    }}
+
+    .desktop-ranking-table tbody tr.top-10 {{
+        background:
+            linear-gradient(90deg, rgba(226,184,79,0.085), rgba(255,255,255,0.018) 42%),
+            rgba(255,255,255,0.018);
+    }}
+
+    .desktop-ranking-table tbody tr:hover {{
+        background: rgba(127,163,90,0.105);
+        box-shadow: inset 4px 0 0 rgba(226,184,79,0.82);
+    }}
+
+    .desktop-ranking-table th.rank-column,
+    .desktop-ranking-table td.rank-column {{
+        width: 58px;
+        text-align: center;
+        padding-left: 0.82rem;
+        padding-right: 0.58rem;
+    }}
+
+    .desktop-ranking-table .rank-pill {{
+        min-width: 30px;
+        height: 30px;
+        font-size: 0.75rem;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.055), 0 0 16px rgba(226,184,79,0.10);
+    }}
+
+    .desktop-ranking-table th.player-column,
+    .desktop-ranking-table td.player-column {{
+        width: 34%;
+    }}
+
+    .desktop-ranking-table th.state-column,
+    .desktop-ranking-table td.state-column {{
+        width: 96px;
+        text-align: center;
+    }}
+
+    .desktop-ranking-table th.numeric-column,
+    .desktop-ranking-table td.numeric-column {{
+        text-align: right;
+    }}
+
+    .desktop-ranking-table th.period-column,
+    .desktop-ranking-table td.period-column {{
+        width: 22%;
+    }}
+
+    .desktop-ranking-player,
+    .desktop-ranking-player:visited {{
+        color: var(--rb-text);
+        font-weight: 930;
+        text-decoration: none;
+        overflow-wrap: anywhere;
+    }}
+
+    .desktop-ranking-player.available {{
+        color: #f6f1d5;
+        border-bottom: 1px solid rgba(244,201,93,0.38);
+        text-shadow: 0 0 12px rgba(244,201,93,0.10);
+    }}
+
+    .desktop-ranking-player.available:hover {{
+        color: var(--rb-gold);
+    }}
+
+    .desktop-state-badge {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        padding: 0.31rem 0.62rem;
+        border: 1px solid rgba(127,163,90,0.22);
+        border-radius: 999px;
+        color: var(--rb-green);
+        background: rgba(127,163,90,0.11);
+        font-size: 0.74rem;
+        font-weight: 930;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }}
+
+    .desktop-ranking-value {{
+        color: var(--rb-text);
+        font-weight: 940;
+        white-space: nowrap;
+    }}
+
+    .desktop-ranking-period {{
+        color: rgba(220,231,231,0.78);
+        font-size: 0.82rem;
+        font-weight: 780;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }}
+
+    .st-key-ranking_general_pagination,
+    .st-key-ranking_average_pagination {{
+        margin: 0.4rem 0 0.35rem;
+        padding: 0.28rem;
+        border: 1px solid rgba(240,218,159,0.075);
+        border-radius: 14px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.012)),
+            rgba(0,0,0,0.12);
+    }}
+
+    .st-key-ranking_general_pagination .page-note,
+    .st-key-ranking_average_pagination .page-note {{
+        min-height: 42px;
+        border-color: rgba(76,201,176,0.18);
+        background: rgba(76,201,176,0.045);
+        color: rgba(220,231,231,0.9);
+        font-size: 0.76rem;
+        font-weight: 900;
+    }}
+
+    .st-key-ranking_general_pagination .stButton > button,
+    .st-key-ranking_average_pagination .stButton > button {{
+        min-height: 42px;
+        border-radius: 12px;
+        font-weight: 900;
     }}
 
     .rb-table {{
@@ -3972,47 +4159,69 @@ def render_interactive_ranking_table(data, key_prefix, public_profile_index):
         ui_html('<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>')
         return
 
-    with st.container(key=f"{key_prefix}_native_table"):
-        columns = list(data.columns)
-        width_map = {
-            "#": 0.12,
-            "Jogador": 0.34,
-            "Estado": 0.15,
-            "Capturas": 0.22,
-            "Dias ativo": 0.17,
-            "Média": 0.20,
-            "Período": 0.20,
-        }
-        column_widths = [width_map.get(str(column), 0.18) for column in columns]
+    columns = list(data.columns)
 
-        header_cols = st.columns(column_widths, vertical_alignment="center")
-        for col, label in zip(header_cols, columns):
-            with col:
-                st.caption(str(label))
+    def column_class(column):
+        if column == "#":
+            return "rank-column"
+        if column == "Jogador":
+            return "player-column"
+        if column == "Estado":
+            return "state-column"
+        if column in {"Capturas", "Dias ativo", "Média", "Dias"}:
+            return "numeric-column"
+        if column == "Período":
+            return "period-column"
+        return ""
 
-        for row_index, (_, row) in enumerate(data.iterrows()):
-            rank = int(row["#"]) if "#" in row else row_index + 1
-            row_cols = st.columns(column_widths, vertical_alignment="center")
-            for col, column in zip(row_cols, columns):
-                raw_value = row[column]
-                with col:
-                    if column == "#":
-                        medal_class = " medal" if rank <= 3 else ""
-                        ui_html(f'<span class="rank-pill{medal_class}">{rank}</span>')
-                    elif column == "Jogador":
-                        nickname = str(raw_value or "").strip()
-                        if normalize_nickname_match_key(nickname) in public_profile_index:
-                            st.button(
-                                nickname,
-                                key=f"{key_prefix}_player_{row_index}_{normalize_nickname_match_key(nickname)}",
-                                help=f"Abrir perfil publico de {nickname}",
-                                on_click=open_player_profile,
-                                args=(nickname,),
-                            )
-                        else:
-                            ui_html(f'<span class="player-profile-disabled" title="Perfil ainda nao disponivel">{escape(nickname)}</span>')
-                    else:
-                        st.write(str(raw_value))
+    header = "".join(
+        f'<th class="{column_class(str(column))}">{escape(str(column))}</th>'
+        for column in columns
+    )
+
+    rows = []
+    for row_index, (_, row) in enumerate(data.iterrows()):
+        rank = int(row["#"]) if "#" in row else row_index + 1
+        row_class = "top-10" if rank <= 10 else ""
+        cells = []
+        for column in columns:
+            raw_value = row[column]
+            col_class = column_class(str(column))
+            if column == "#":
+                medal_class = " medal" if rank <= 3 else ""
+                value = f'<span class="rank-pill{medal_class}">{rank}</span>'
+            elif column == "Jogador":
+                nickname = str(raw_value or "").strip()
+                if normalize_nickname_match_key(nickname) in public_profile_index:
+                    href = f'?player={quote(nickname, safe="")}'
+                    value = (
+                        f'<a class="desktop-ranking-player available" href="{href}" '
+                        f'title="Abrir perfil público de {escape(nickname)}">{escape(nickname)}</a>'
+                    )
+                else:
+                    value = (
+                        f'<span class="desktop-ranking-player" title="Perfil ainda não disponível">'
+                        f'{escape(nickname)}</span>'
+                    )
+            elif column == "Estado":
+                value = f'<span class="desktop-state-badge">{escape(str(raw_value))}</span>'
+            elif column in {"Capturas", "Dias ativo", "Média", "Dias"}:
+                value = f'<span class="desktop-ranking-value">{escape(str(raw_value))}</span>'
+            elif column == "Período":
+                value = f'<span class="desktop-ranking-period">{escape(str(raw_value))}</span>'
+            else:
+                value = escape(str(raw_value))
+            cells.append(f'<td class="{col_class}">{value}</td>')
+        rows.append(f'<tr class="{row_class}">{"".join(cells)}</tr>')
+
+    ui_html(f"""
+        <div class="desktop-ranking-wrap">
+            <table class="desktop-ranking-table">
+                <thead><tr>{header}</tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+        </div>
+    """)
 
 
 def clamp_page_index(value, page_count):
