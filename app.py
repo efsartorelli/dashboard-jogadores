@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 import src.config as app_config
 from src.auth import AuthError, AuthSession, get_auth_client
@@ -171,6 +172,50 @@ def get_public_profile_index_cached():
 
 def ui_html(markup):
     st.html(markup)
+
+
+SCROLL_TO_TOP_PENDING_KEY = "scroll_to_top_pending"
+LAST_RENDERED_PAGE_KEY = "last_rendered_page"
+
+
+def request_scroll_to_top() -> None:
+    st.session_state[SCROLL_TO_TOP_PENDING_KEY] = True
+
+
+def scroll_to_top_once() -> None:
+    if not st.session_state.pop(SCROLL_TO_TOP_PENDING_KEY, False):
+        return
+
+    components.html(
+        """
+        <script>
+        const scrollToTop = () => {
+          try {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            parentWindow.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            parentDocument.documentElement.scrollTop = 0;
+            parentDocument.body.scrollTop = 0;
+            [
+              '[data-testid="stAppViewContainer"]',
+              '[data-testid="stMain"]',
+              '.main'
+            ].forEach((selector) => {
+              const element = parentDocument.querySelector(selector);
+              if (element) {
+                element.scrollTop = 0;
+              }
+            });
+          } catch (error) {}
+        };
+        scrollToTop();
+        setTimeout(scrollToTop, 50);
+        setTimeout(scrollToTop, 220);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 def clear_dashboard_caches():
@@ -4318,6 +4363,7 @@ def open_player_profile(nickname):
     st.session_state["selected_player_nickname"] = selected
     st.session_state["current_page"] = "player_profile"
     st.session_state["last_rankings_anchor"] = "rankings"
+    request_scroll_to_top()
 
 
 def table_html(data):
@@ -5851,8 +5897,12 @@ else:
     default_page = "Dashboard"
 
 current_page = render_sidebar(profile, page_options, default_page)
+if st.session_state.get(LAST_RENDERED_PAGE_KEY) != current_page:
+    request_scroll_to_top()
+st.session_state[LAST_RENDERED_PAGE_KEY] = current_page
 
 render_navbar()
+scroll_to_top_once()
 
 if current_page == "Perfil":
     render_profile_page(profile, session)
