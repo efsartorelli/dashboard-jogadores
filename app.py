@@ -1676,6 +1676,7 @@ def inject_css():
         gap: 0.38rem;
     }}
 
+    .player-card-header,
     .mobile-ranking-heading {{
         min-width: 0;
         display: flex;
@@ -1704,6 +1705,22 @@ def inject_css():
 
     .mobile-ranking-player.available:hover {{
         color: var(--rb-gold);
+    }}
+
+    [class*="st-key-ranking_general_mobile_card_header_"] [data-testid="stHorizontalBlock"],
+    [class*="st-key-ranking_average_mobile_card_header_"] [data-testid="stHorizontalBlock"],
+    [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stHorizontalBlock"],
+    [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stHorizontalBlock"] {{
+        align-items: center;
+        gap: 0.48rem;
+        flex-wrap: wrap;
+    }}
+
+    [class*="st-key-ranking_general_mobile_card_header_"] [data-testid="stMarkdownContainer"],
+    [class*="st-key-ranking_average_mobile_card_header_"] [data-testid="stMarkdownContainer"],
+    [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stMarkdownContainer"],
+    [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stMarkdownContainer"] {{
+        min-width: 0;
     }}
 
     [class*="st-key-ranking_general_mobile_player_link_"] .stButton,
@@ -3638,18 +3655,48 @@ def inject_css():
             box-sizing: border-box;
         }}
 
-        [class*="st-key-ranking_general_mobile_card_item_"] [data-testid="column"],
-        [class*="st-key-ranking_average_mobile_card_item_"] [data-testid="column"],
-        [class*="st-key-ranking-general-mobile-card-item-"] [data-testid="column"],
-        [class*="st-key-ranking-average-mobile-card-item-"] [data-testid="column"] {{
+        [class*="st-key-ranking_general_mobile_card_header_"],
+        [class*="st-key-ranking_average_mobile_card_header_"],
+        [class*="st-key-ranking-general-mobile-card-header-"],
+        [class*="st-key-ranking-average-mobile-card-header-"] {{
+            margin: 0 0 0.42rem;
             min-width: 0;
+            width: 100%;
         }}
 
-        [class*="st-key-ranking_general_mobile_card_item_"] [data-testid="stHorizontalBlock"],
-        [class*="st-key-ranking_average_mobile_card_item_"] [data-testid="stHorizontalBlock"],
-        [class*="st-key-ranking-general-mobile-card-item-"] [data-testid="stHorizontalBlock"],
-        [class*="st-key-ranking-average-mobile-card-item-"] [data-testid="stHorizontalBlock"] {{
-            gap: 0.72rem;
+        [class*="st-key-ranking_general_mobile_card_header_"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-ranking_average_mobile_card_header_"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stHorizontalBlock"] {{
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.48rem !important;
+            flex-wrap: wrap !important;
+            width: 100%;
+        }}
+
+        [class*="st-key-ranking_general_mobile_card_header_"] [data-testid="stVerticalBlock"],
+        [class*="st-key-ranking_average_mobile_card_header_"] [data-testid="stVerticalBlock"],
+        [class*="st-key-ranking-general-mobile-card-header-"] [data-testid="stVerticalBlock"],
+        [class*="st-key-ranking-average-mobile-card-header-"] [data-testid="stVerticalBlock"] {{
+            min-width: 0;
+            width: fit-content;
+            max-width: 100%;
+        }}
+
+        [class*="st-key-ranking_general_mobile_player_link_"],
+        [class*="st-key-ranking_average_mobile_player_link_"],
+        [class*="st-key-ranking-general-mobile-player-link-"],
+        [class*="st-key-ranking-average-mobile-player-link-"] {{
+            min-width: 0;
+            max-width: 100%;
+        }}
+
+        [class*="st-key-ranking_general_mobile_card_body_"] .mobile-ranking-body,
+        [class*="st-key-ranking_average_mobile_card_body_"] .mobile-ranking-body,
+        [class*="st-key-ranking-general-mobile-card-body-"] .mobile-ranking-body,
+        [class*="st-key-ranking-average-mobile-card-body-"] .mobile-ranking-body {{
+            margin-left: calc(44px + 0.48rem);
         }}
 
         [class*="st-key-ranking_general_mobile_card_item_"][class*="_top_"],
@@ -4550,28 +4597,30 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
 
         extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
         with st.container(key=f"{key_prefix}_mobile_card_item_{profile_key_part}_{tier_key_part}_{row_index}"):
-            rank_col, body_col = st.columns([0.16, 0.84], vertical_alignment="top")
-            with rank_col:
+            with st.container(
+                key=f"{key_prefix}_mobile_card_header_{row_index}",
+                horizontal=True,
+                horizontal_alignment="left",
+                vertical_alignment="center",
+                gap="small",
+            ):
                 ui_html(f'<div class="mobile-ranking-rank">#{rank}</div>')
-            with body_col:
-                heading_player_col, heading_state_col = st.columns([0.68, 0.32], vertical_alignment="center")
-                with heading_player_col:
-                    if has_profile:
-                        with st.container(key=f"{key_prefix}_mobile_player_link_{row_index}"):
-                            st.button(
-                                nickname,
-                                key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
-                                help=f"Abrir perfil público de {nickname}",
-                                on_click=open_player_profile,
-                                args=(nickname,),
-                            )
-                    else:
-                        ui_html(
-                            f'<span class="mobile-ranking-player" title="Perfil ainda não disponível">'
-                            f'{escape(nickname)}</span>'
+                if has_profile:
+                    with st.container(key=f"{key_prefix}_mobile_player_link_{row_index}", width="content"):
+                        st.button(
+                            nickname,
+                            key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
+                            help=f"Abrir perfil público de {nickname}",
+                            on_click=open_player_profile,
+                            args=(nickname,),
                         )
-                with heading_state_col:
-                    ui_html(f'<span class="mobile-ranking-state">{escape(state)}</span>')
+                else:
+                    ui_html(
+                        f'<span class="mobile-ranking-player" title="Perfil ainda não disponível">'
+                        f'{escape(nickname)}</span>'
+                    )
+                ui_html(f'<span class="mobile-ranking-state">{escape(state)}</span>')
+            with st.container(key=f"{key_prefix}_mobile_card_body_{row_index}"):
                 ui_html(f"""
                     <div class="mobile-ranking-body">
                         <div class="mobile-ranking-meta"><span>{escape(metric_label)}</span></div>
