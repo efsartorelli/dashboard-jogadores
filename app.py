@@ -1796,6 +1796,11 @@ def inject_css():
         display: none;
     }}
 
+    [class*="st-key-ranking_general_mobile_card_item_"],
+    [class*="st-key-ranking_average_mobile_card_item_"] {{
+        display: none;
+    }}
+
     .desktop-ranking-wrap {{
         width: 100%;
         overflow: hidden;
@@ -2104,9 +2109,83 @@ def inject_css():
         background: rgba(127,163,90,0.09);
     }}
 
+    .st-key-ranking_general_native_table,
+    .st-key-ranking_average_native_table {{
+        width: 100%;
+        margin-top: 0.92rem;
+        padding: 0.82rem;
+        border: 1px solid rgba(240,218,159,0.14);
+        border-radius: 20px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(226,184,79,0.07), transparent 18rem),
+            radial-gradient(circle at 100% 0%, rgba(76,201,176,0.045), transparent 18rem),
+            linear-gradient(180deg, rgba(18,20,15,0.84), rgba(7,10,8,0.62));
+        box-shadow: 0 16px 44px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.045);
+        overflow: hidden;
+    }}
+
+    .st-key-ranking_general_native_table [data-testid="stHorizontalBlock"],
+    .st-key-ranking_average_native_table [data-testid="stHorizontalBlock"] {{
+        align-items: center !important;
+        gap: 0.82rem !important;
+        min-height: 52px;
+        padding: 0.62rem 0.72rem;
+        border-bottom: 1px solid rgba(240,218,159,0.065);
+    }}
+
+    .st-key-ranking_general_native_table [data-testid="column"],
+    .st-key-ranking_average_native_table [data-testid="column"] {{
+        min-width: 0 !important;
+        display: flex;
+        align-items: center;
+    }}
+
+    [class*="st-key-ranking_general_native_header"],
+    [class*="st-key-ranking_average_native_header"] {{
+        border-bottom: 1px solid rgba(240,218,159,0.12);
+        background: rgba(255,255,255,0.018);
+    }}
+
+    [class*="st-key-ranking_general_native_header"] [data-testid="stHorizontalBlock"],
+    [class*="st-key-ranking_average_native_header"] [data-testid="stHorizontalBlock"] {{
+        min-height: 40px;
+        padding-top: 0.48rem;
+        padding-bottom: 0.48rem;
+        border-bottom: 0;
+    }}
+
+    [class*="st-key-ranking_general_native_header"] [data-testid="stCaptionContainer"],
+    [class*="st-key-ranking_average_native_header"] [data-testid="stCaptionContainer"] {{
+        color: rgba(220,231,231,0.62) !important;
+        font-size: 0.62rem !important;
+        font-weight: 920 !important;
+        letter-spacing: 0.14em !important;
+        text-transform: uppercase !important;
+    }}
+
+    [class*="st-key-ranking_general_native_row_"],
+    [class*="st-key-ranking_average_native_row_"] {{
+        padding: 0.72rem 0.72rem;
+        border-bottom: 1px solid rgba(240,218,159,0.06);
+        transition: background 150ms ease, box-shadow 150ms ease;
+    }}
+
+    [class*="st-key-ranking_general_native_row_"]:hover,
+    [class*="st-key-ranking_average_native_row_"]:hover {{
+        background: rgba(127,163,90,0.055);
+        box-shadow: inset 3px 0 0 rgba(226,184,79,0.18);
+    }}
+
+    [class*="st-key-ranking_general_native_row_"]:last-child,
+    [class*="st-key-ranking_average_native_row_"]:last-child {{
+        border-bottom: 0;
+    }}
+
     .st-key-ranking_general_native_table button[kind="secondary"],
     .st-key-ranking_average_native_table button[kind="secondary"] {{
-        min-height: 34px;
+        min-height: 32px;
+        width: auto !important;
+        max-width: 100%;
         padding: 0.15rem 0 !important;
         border: 0 !important;
         border-bottom: 1px solid rgba(244,201,93,0.36) !important;
@@ -2116,6 +2195,8 @@ def inject_css():
         box-shadow: none !important;
         font-weight: 900 !important;
         text-align: left !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
     }}
 
     .st-key-ranking_general_native_table button[kind="secondary"]:hover,
@@ -3531,6 +3612,7 @@ def inject_css():
 
         [class*="st-key-ranking_general_mobile_card_item_"],
         [class*="st-key-ranking_average_mobile_card_item_"] {{
+            display: block;
             position: relative;
             width: 100%;
         }}
@@ -4509,10 +4591,11 @@ def render_interactive_ranking_table(data, key_prefix, public_profile_index):
         }
         column_widths = [width_map.get(str(column), 0.18) for column in columns]
 
-        header_cols = st.columns(column_widths, vertical_alignment="center")
-        for col, label in zip(header_cols, columns):
-            with col:
-                st.caption(str(label))
+        with st.container(key=f"{key_prefix}_native_header"):
+            header_cols = st.columns(column_widths, vertical_alignment="center")
+            for col, label in zip(header_cols, columns):
+                with col:
+                    st.caption(str(label))
 
         for row_index, (_, row) in enumerate(data.iterrows()):
             rank = int(row["#"]) if "#" in row else row_index + 1
