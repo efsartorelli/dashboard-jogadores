@@ -1,6 +1,5 @@
 from html import escape
 from datetime import date
-from urllib.parse import quote
 import os
 import time
 
@@ -1793,7 +1792,8 @@ def inject_css():
         overflow-wrap: anywhere;
     }}
 
-    .profile-button {{
+    [class*="st-key-ranking_general_mobile_profile_action_"],
+    [class*="st-key-ranking_average_mobile_profile_action_"] {{
         display: none;
     }}
 
@@ -3616,10 +3616,48 @@ def inject_css():
             display: block;
             position: relative;
             width: 100%;
+            margin-top: 0.72rem;
+            padding: 0.92rem;
+            border: 1px solid rgba(226,184,79,0.18);
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at 88% 0%, rgba(127,163,90,0.12), transparent 8rem),
+                linear-gradient(155deg, rgba(30,28,20,0.82), rgba(10,13,14,0.62));
+            box-shadow: 0 14px 34px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
+            overflow: hidden;
+            box-sizing: border-box;
         }}
 
-        .profile-button {{
-            display: inline-flex;
+        [class*="st-key-ranking_general_mobile_card_item_"]:has(.mobile-ranking-card.has-profile),
+        [class*="st-key-ranking_average_mobile_card_item_"]:has(.mobile-ranking-card.has-profile) {{
+            padding-bottom: 3.2rem;
+        }}
+
+        [class*="st-key-ranking_general_mobile_card_item_"]:has(.mobile-ranking-card.top-3),
+        [class*="st-key-ranking_average_mobile_card_item_"]:has(.mobile-ranking-card.top-3) {{
+            border-color: rgba(226,184,79,0.38);
+            box-shadow: 0 18px 44px rgba(0,0,0,0.22), 0 0 26px rgba(226,184,79,0.08);
+        }}
+
+        [class*="st-key-ranking_general_mobile_card_item_"] .mobile-ranking-card,
+        [class*="st-key-ranking_average_mobile_card_item_"] .mobile-ranking-card {{
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            overflow: visible;
+        }}
+
+        [class*="st-key-ranking_general_mobile_card_item_"] .mobile-ranking-card.has-profile,
+        [class*="st-key-ranking_average_mobile_card_item_"] .mobile-ranking-card.has-profile {{
+            padding-bottom: 0;
+        }}
+
+        [class*="st-key-ranking_general_mobile_profile_action_"],
+        [class*="st-key-ranking_average_mobile_profile_action_"] {{
+            display: block;
             align-items: center;
             justify-content: center;
             position: absolute;
@@ -3627,28 +3665,39 @@ def inject_css():
             bottom: 1.08rem;
             z-index: 8;
             margin: 0;
+            padding: 0;
+        }}
+
+        [class*="st-key-ranking_general_mobile_profile_action_"] .stButton,
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton {{
+            display: flex;
+            justify-content: flex-end;
+        }}
+
+        [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button,
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button {{
             width: auto !important;
             min-width: 72px;
             max-width: 92px;
             min-height: 32px;
             padding: 0.26rem 0.62rem;
             border-radius: 999px;
-            border: 1px solid rgba(244,201,93,0.18);
+            border: 1px solid rgba(244,201,93,0.18) !important;
             background: rgba(10,16,20,0.88);
             color: rgba(246,241,213,0.92);
             font-size: 0.68rem;
             font-weight: 900;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            text-decoration: none;
             line-height: 1;
             box-shadow: 0 10px 22px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.06);
         }}
 
-        .profile-button:hover {{
+        [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button:hover,
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button:hover {{
             color: #171207;
-            border-color: rgba(244,201,93,0.62);
-            background: linear-gradient(145deg, rgba(244,201,93,0.95), rgba(127,163,90,0.8));
+            border-color: rgba(244,201,93,0.62) !important;
+            background: linear-gradient(145deg, rgba(244,201,93,0.95), rgba(127,163,90,0.8)) !important;
         }}
 
         .st-key-ranking_general_panel,
@@ -4542,13 +4591,6 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
             )
 
         extra_html = f'<div class="mobile-ranking-extra">{escape(extra_text)}</div>' if extra_text else ""
-        profile_button_html = ""
-        if has_profile:
-            profile_href = f"?player={quote(nickname, safe='')}"
-            profile_button_html = (
-                f'<a class="profile-button" href="{profile_href}" target="_self" '
-                f'aria-label="Abrir perfil público de {escape(nickname)}">Perfil</a>'
-            )
         with st.container(key=f"{key_prefix}_mobile_card_item_{row_index}"):
             ui_html(f"""
             <div class="mobile-ranking-cards">
@@ -4564,10 +4606,18 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
                         <div class="mobile-ranking-sub">{escape(sub_text)}</div>
                         {extra_html}
                     </div>
-                    {profile_button_html}
                 </article>
             </div>
         """)
+            if has_profile:
+                with st.container(key=f"{key_prefix}_mobile_profile_action_{row_index}"):
+                    st.button(
+                        "Perfil",
+                        key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
+                        help=f"Abrir perfil público de {nickname}",
+                        on_click=open_player_profile,
+                        args=(nickname,),
+                    )
 
 
 def render_interactive_ranking_table(data, key_prefix, public_profile_index):
