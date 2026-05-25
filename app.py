@@ -3429,10 +3429,71 @@ def inject_css():
             padding: 0.45rem 0.35rem;
         }}
 
+        .st-key-ranking_general_pagination,
+        .st-key-ranking_average_pagination {{
+            margin: 0.72rem 0 1rem;
+            padding: 0.42rem;
+            border: 1px solid rgba(240,218,159,0.12);
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at 50% 0%, rgba(226,184,79,0.06), transparent 8rem),
+                rgba(5,8,7,0.34);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
+        }}
+
         .st-key-ranking_general_pagination [data-testid="stHorizontalBlock"],
         .st-key-ranking_average_pagination [data-testid="stHorizontalBlock"],
         .st-key-curation_pagination [data-testid="stHorizontalBlock"] {{
-            gap: 0.45rem;
+            display: grid !important;
+            grid-template-columns: minmax(82px, 0.82fr) minmax(118px, 1.36fr) minmax(82px, 0.82fr) !important;
+            gap: 0.48rem !important;
+            align-items: stretch !important;
+            width: 100% !important;
+            overflow: visible !important;
+        }}
+
+        .st-key-ranking_general_pagination [data-testid="column"],
+        .st-key-ranking_average_pagination [data-testid="column"],
+        .st-key-curation_pagination [data-testid="column"] {{
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            flex: unset !important;
+        }}
+
+        .st-key-ranking_general_pagination .stButton,
+        .st-key-ranking_average_pagination .stButton,
+        .st-key-curation_pagination .stButton {{
+            height: 100%;
+        }}
+
+        .st-key-ranking_general_pagination .stButton > button,
+        .st-key-ranking_average_pagination .stButton > button,
+        .st-key-curation_pagination .stButton > button {{
+            min-height: 48px;
+            height: 48px;
+            padding: 0.4rem 0.5rem;
+            border-radius: 14px;
+            font-size: 0.82rem;
+            font-weight: 900;
+            white-space: nowrap;
+            background: rgba(255,255,255,0.04);
+            border-color: rgba(127,163,90,0.26);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+        }}
+
+        .st-key-ranking_general_pagination .page-note,
+        .st-key-ranking_average_pagination .page-note,
+        .st-key-curation_pagination .page-note {{
+            min-height: 48px;
+            height: 48px;
+            padding: 0.36rem 0.42rem;
+            border-radius: 14px;
+            border-color: rgba(76,201,176,0.22);
+            background: rgba(76,201,176,0.06);
+            color: rgba(220,231,231,0.92);
+            font-size: 0.74rem;
+            font-weight: 950;
         }}
 
         .stButton > button {{
