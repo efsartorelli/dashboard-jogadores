@@ -3528,20 +3528,31 @@ def inject_css():
         [class*="st-key-ranking_general_mobile_profile_action_"],
         [class*="st-key-ranking_average_mobile_profile_action_"] {{
             display: block;
-            margin: -0.42rem 0 0.86rem;
-            padding: 0 0.72rem;
+            margin: -0.54rem 0 0.9rem;
+            padding: 0 0.8rem;
+        }}
+
+        [class*="st-key-ranking_general_mobile_profile_action_"] .stButton,
+        [class*="st-key-ranking_average_mobile_profile_action_"] .stButton {{
+            display: flex;
+            justify-content: flex-end;
         }}
 
         [class*="st-key-ranking_general_mobile_profile_action_"] .stButton > button,
         [class*="st-key-ranking_average_mobile_profile_action_"] .stButton > button {{
-            min-height: 42px;
-            border-radius: 0 0 16px 16px;
+            width: auto !important;
+            min-width: 86px;
+            max-width: 120px;
+            min-height: 36px;
+            padding: 0.34rem 0.72rem;
+            border-radius: 999px;
             border-color: rgba(244,201,93,0.18);
             background: rgba(244,201,93,0.055);
             color: rgba(246,241,213,0.92);
-            font-size: 0.76rem;
+            font-size: 0.72rem;
             font-weight: 900;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }}
 
         .st-key-ranking_general_panel,
@@ -4454,7 +4465,7 @@ def render_mobile_ranking_cards(data, key_prefix, public_profile_index):
         if has_profile:
             with st.container(key=f"{key_prefix}_mobile_profile_action_{row_index}"):
                 st.button(
-                    f"Abrir perfil de {nickname}",
+                    "Perfil",
                     key=f"{key_prefix}_mobile_player_{row_index}_{normalize_nickname_match_key(nickname)}",
                     help=f"Abrir perfil público de {nickname}",
                     on_click=open_player_profile,
