@@ -77,8 +77,8 @@ def build_average_ranking(data, somente_melhor, apenas_mensais):
 
 
 @st.cache_data(show_spinner=False)
-def build_state_stats(base, order_by="Total capturas"):
-    return compute_state_stats(base, order_by)
+def build_state_stats(base, order_by="Total capturas", ranking_base=None):
+    return compute_state_stats(base, order_by, ranking_base)
 
 
 @st.cache_data(show_spinner=False)
@@ -1632,7 +1632,7 @@ def inject_css():
     }}
 
     .state-card {{
-        min-height: 172px;
+        min-height: 188px;
         padding: 1rem;
         border: 1px solid var(--rb-border);
         border-radius: 21px;
@@ -1654,11 +1654,27 @@ def inject_css():
         gap: 0.55rem;
     }}
 
+    .state-name-line {{
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 0.42rem;
+    }}
+
     .state-uf {{
         color: var(--rb-text);
         font-size: 1.55rem;
         font-weight: 950;
         line-height: 1;
+    }}
+
+    .state-share {{
+        color: rgba(244,201,93,0.84);
+        font-size: 0.86rem;
+        font-weight: 900;
+        line-height: 1;
+        white-space: nowrap;
+        text-shadow: 0 0 14px rgba(244,201,93,0.16);
     }}
 
     .state-position {{
@@ -1731,11 +1747,25 @@ def inject_css():
         border-top: 1px solid var(--rb-line);
         color: var(--rb-muted);
         font-size: 0.78rem;
-        line-height: 1.45;
+        line-height: 1.5;
     }}
 
     .state-best strong {{
         color: var(--rb-text);
+    }}
+
+    .state-average-position {{
+        display: block;
+        margin-top: 0.34rem;
+        color: rgba(240,218,159,0.72);
+        font-size: 0.78rem;
+        font-weight: 820;
+        line-height: 1.25;
+    }}
+
+    .state-average-position strong {{
+        color: var(--rb-green);
+        font-weight: 950;
     }}
 
     .ranges-layout {{
@@ -2807,6 +2837,23 @@ def inject_css():
             padding: 0.9rem;
         }}
 
+        .state-top {{
+            align-items: flex-start;
+        }}
+
+        .state-name-line {{
+            flex-wrap: nowrap;
+            gap: 0.34rem;
+        }}
+
+        .state-uf {{
+            font-size: 1.38rem;
+        }}
+
+        .state-share {{
+            font-size: 0.78rem;
+        }}
+
         .state-metrics {{
             gap: 0.44rem;
         }}
@@ -3264,6 +3311,28 @@ def render_filters(data):
     return filtered, somente_melhor, apenas_mensais
 
 
+def format_percent_value(value):
+    try:
+        numeric_value = round(float(value), 1)
+    except (TypeError, ValueError):
+        return "0%"
+
+    if numeric_value.is_integer():
+        return f"{int(numeric_value)}%"
+    return f"{numeric_value:.1f}%"
+
+
+def format_position_value(value):
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return "#-"
+
+    if not np.isfinite(numeric_value):
+        return "#-"
+    return f"#{int(round(numeric_value))}"
+
+
 def render_state_cards(stats):
     if stats.empty:
         ui_html('<div class="empty-state">Nenhum estado encontrado com os filtros atuais.</div>')
@@ -3271,10 +3340,15 @@ def render_state_cards(stats):
 
     cards = []
     for _, row in stats.iterrows():
+        state_share = format_percent_value(row.get("Representatividade", 0))
+        average_position = format_position_value(row.get("Posição média", 0))
         cards.append(f"""
             <article class="state-card">
                 <div class="state-top">
-                    <div class="state-uf">{escape(str(row["Estado"]))}</div>
+                    <div class="state-name-line">
+                        <div class="state-uf">{escape(str(row["Estado"]))}</div>
+                        <div class="state-share">• {state_share}</div>
+                    </div>
                     <div class="state-position">#{int(row["Posição"])}</div>
                 </div>
                 <div class="state-metrics">
@@ -3294,6 +3368,7 @@ def render_state_cards(stats):
                 <div class="state-best">
                     Melhor jogador: <strong>{escape(str(row["Melhor jogador"]))}</strong><br>
                     {format_int(row["Valor melhor jogador"])} capturas
+                    <span class="state-average-position">Posição média: <strong>{average_position}</strong></span>
                 </div>
             </article>
         """)
@@ -4093,7 +4168,7 @@ with st.container(key="states_section"):
                 default="Total capturas",
                 selection_mode="single",
             )
-    render_state_cards(build_state_stats(filtered_base, state_order))
+    render_state_cards(build_state_stats(filtered_base, state_order, base_all))
 
 with st.container(key="ranges_section"):
     ui_html('<div id="faixas" class="section-anchor"></div>')

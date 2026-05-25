@@ -40,6 +40,12 @@ class MetricsRegressionTest(unittest.TestCase):
         sp = stats[stats["Estado"] == "SP"].iloc[0]
         self.assertEqual(int(sp["Jogadores"]), 118)
         self.assertEqual(int(sp["Total"]), 80_857_436)
+        expected_share = 118 / self.base["id_jogador"].nunique() * 100
+        self.assertAlmostEqual(float(sp["Representatividade"]), expected_share, places=1)
+        self.assertGreater(int(sp["Posição média"]), 0)
+        sp_only = build_state_stats(self.base[self.base["state"] == "SP"], ranking_base=self.base).iloc[0]
+        self.assertAlmostEqual(float(sp_only["Representatividade"]), expected_share, places=1)
+        self.assertEqual(int(sp_only["Posição média"]), int(sp["Posição média"]))
 
         distribution = build_distribution(self.base)
         self.assertEqual(distribution.set_index("Faixa").loc["1M+", "Jogadores"], 15)
