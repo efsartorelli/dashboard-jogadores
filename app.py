@@ -1958,23 +1958,32 @@ def inject_css():
 
     .st-key-ranking_general_pagination [data-testid="stHorizontalBlock"],
     .st-key-ranking_average_pagination [data-testid="stHorizontalBlock"] {{
-        display: grid !important;
-        grid-template-columns: minmax(92px, 0.82fr) minmax(150px, 1.4fr) minmax(92px, 0.82fr) !important;
-        gap: 0.72rem !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        justify-content: space-between !important;
         align-items: center !important;
+        gap: 0.72rem !important;
         width: 100% !important;
+        min-width: 0 !important;
     }}
 
     .st-key-ranking_general_pagination [data-testid="column"],
     .st-key-ranking_average_pagination [data-testid="column"] {{
-        width: 100% !important;
+        width: auto !important;
         min-width: 0 !important;
-        flex: unset !important;
+        flex: 0 0 auto !important;
+    }}
+
+    .st-key-ranking_general_pagination [data-testid="column"]:nth-child(2),
+    .st-key-ranking_average_pagination [data-testid="column"]:nth-child(2) {{
+        flex: 1 1 auto !important;
+        min-width: 150px !important;
     }}
 
     .st-key-ranking_general_pagination .page-note,
     .st-key-ranking_average_pagination .page-note {{
         min-height: 42px;
+        min-width: 150px;
         border-color: rgba(76,201,176,0.18);
         background: rgba(76,201,176,0.045);
         color: rgba(220,231,231,0.9);
@@ -1985,8 +1994,14 @@ def inject_css():
     .st-key-ranking_general_pagination .stButton > button,
     .st-key-ranking_average_pagination .stButton > button {{
         min-height: 42px;
+        min-width: 92px;
+        width: 100%;
         border-radius: 12px;
         font-weight: 900;
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        overflow-wrap: normal !important;
+        writing-mode: horizontal-tb !important;
     }}
 
     .rb-table {{
@@ -3468,6 +3483,15 @@ def inject_css():
             overflow: hidden;
         }}
 
+        .st-key-ranking_general_panel [data-testid="stMarkdownContainer"] h4,
+        .st-key-ranking_average_panel [data-testid="stMarkdownContainer"] h4 {{
+            text-align: center;
+            max-width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.16;
+        }}
+
         .rb-table-wrap {{
             display: none;
         }}
@@ -3498,16 +3522,21 @@ def inject_css():
                 radial-gradient(circle at 50% 0%, rgba(226,184,79,0.06), transparent 8rem),
                 rgba(5,8,7,0.34);
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }}
 
         .st-key-ranking_general_pagination [data-testid="stHorizontalBlock"],
         .st-key-ranking_average_pagination [data-testid="stHorizontalBlock"],
         .st-key-curation_pagination [data-testid="stHorizontalBlock"] {{
             display: grid !important;
-            grid-template-columns: minmax(82px, 0.82fr) minmax(118px, 1.36fr) minmax(82px, 0.82fr) !important;
-            gap: 0.48rem !important;
+            grid-template-columns: minmax(74px, 0.82fr) minmax(112px, 1.2fr) minmax(74px, 0.82fr) !important;
+            gap: clamp(0.28rem, 2.2vw, 0.48rem) !important;
             align-items: stretch !important;
+            justify-items: stretch !important;
             width: 100% !important;
+            max-width: 100% !important;
             overflow: visible !important;
         }}
 
@@ -3531,9 +3560,11 @@ def inject_css():
         .st-key-curation_pagination .stButton > button {{
             min-height: 48px;
             height: 48px;
-            padding: 0.4rem 0.5rem;
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 0.38rem 0.34rem;
             border-radius: 14px;
-            font-size: 0.82rem;
+            font-size: clamp(0.72rem, 3.2vw, 0.82rem);
             font-weight: 900;
             white-space: nowrap;
             background: rgba(255,255,255,0.04);
@@ -3546,13 +3577,18 @@ def inject_css():
         .st-key-curation_pagination .page-note {{
             min-height: 48px;
             height: 48px;
-            padding: 0.36rem 0.42rem;
+            width: 100%;
+            min-width: 0;
+            padding: 0.34rem 0.28rem;
             border-radius: 14px;
             border-color: rgba(76,201,176,0.22);
             background: rgba(76,201,176,0.06);
             color: rgba(220,231,231,0.92);
-            font-size: 0.74rem;
+            font-size: clamp(0.66rem, 3vw, 0.74rem);
             font-weight: 950;
+            line-height: 1.18;
+            text-align: center;
+            white-space: normal;
         }}
 
         .stButton > button {{
@@ -3619,6 +3655,22 @@ def inject_css():
             display: block;
         }}
 
+        .st-key-rankings_section .section-head,
+        .st-key-states_section .section-head {{
+            text-align: center;
+        }}
+
+        .st-key-rankings_section .section-kicker,
+        .st-key-states_section .section-kicker {{
+            text-align: center;
+        }}
+
+        .st-key-rankings_section .section-copy,
+        .st-key-states_section .section-copy {{
+            margin-left: auto;
+            margin-right: auto;
+        }}
+
         .range-grid {{
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }}
@@ -3658,36 +3710,94 @@ def inject_css():
 
         .ranking-toggles,
         .st-key-filter_toggle_bar {{
-            justify-content: flex-start;
-            margin: -0.1rem 0 0.65rem;
+            justify-content: center;
+            margin: 0.15rem auto 0.85rem;
+            width: 100%;
         }}
 
         .st-key-filter_toggle_bar > [data-testid="stHorizontalBlock"],
         .st-key-filter_toggle_bar > div > [data-testid="stHorizontalBlock"],
         .st-key-filter_toggle_bar > div > div > [data-testid="stHorizontalBlock"] {{
-            justify-content: flex-start;
+            justify-content: center;
             flex-wrap: wrap;
             width: 100%;
             overflow: visible;
+            gap: 0.72rem;
         }}
 
         .st-key-filter_switch_mean,
         .st-key-filter_switch_monthly {{
-            min-width: 180px;
+            min-width: 0;
+            width: min(100%, 310px);
+            margin-left: auto;
+            margin-right: auto;
+            justify-content: center;
+        }}
+
+        .st-key-filter_switch_mean [data-testid="stWidgetLabel"] p,
+        .st-key-filter_switch_monthly [data-testid="stWidgetLabel"] p {{
+            text-align: center;
         }}
 
         .st-key-filter_states div[data-testid="stButtonGroup"] {{
-            justify-content: flex-start;
+            justify-content: center;
+            width: 100%;
+            gap: 0.48rem;
+        }}
+
+        .st-key-filter_states [data-baseweb="button-group"] {{
+            justify-content: center;
+            width: 100%;
+        }}
+
+        .st-key-filters_panel [data-testid="stWidgetLabel"] {{
+            justify-content: center;
+            text-align: center;
+            width: 100%;
+        }}
+
+        .st-key-filters_panel [data-testid="stWidgetLabel"] p {{
+            text-align: center;
+            width: 100%;
+        }}
+
+        .st-key-filters_panel div[data-baseweb="input"] {{
+            width: 100%;
+            max-width: 100%;
         }}
 
         .st-key-state_sort_control {{
-            justify-content: flex-start;
+            justify-content: center;
             padding-bottom: 0.85rem;
+            width: 100%;
         }}
 
         .st-key-state_sort_control [data-testid="stWidgetLabel"],
         .st-key-state_sort_control div[role="radiogroup"] {{
-            justify-content: flex-start;
+            justify-content: center;
+            width: 100%;
+            text-align: center;
+        }}
+
+        .st-key-state_sort_control div[role="radiogroup"] {{
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.42rem;
+        }}
+
+        .st-key-state_sort_control div[role="radiogroup"] label {{
+            min-width: 0 !important;
+            width: 100% !important;
+            justify-content: center;
+            padding-left: 0.35rem !important;
+            padding-right: 0.35rem !important;
+        }}
+
+        .st-key-state_sort_control div[role="radiogroup"] label p {{
+            width: 100%;
+            text-align: center;
+            white-space: normal;
+            line-height: 1.12;
         }}
     }}
 
@@ -3886,10 +3996,12 @@ def inject_css():
 
         .st-key-filter_switch_mean,
         .st-key-filter_switch_monthly {{
-            width: auto;
-            min-width: 180px;
+            width: min(100%, 310px);
+            min-width: 0;
             min-height: 44px;
             padding: 9px 16px;
+            margin-left: auto;
+            margin-right: auto;
         }}
 
         .st-key-filter_switch_mean [data-testid="stToggle"],
