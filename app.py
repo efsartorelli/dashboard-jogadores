@@ -1,6 +1,7 @@
 from html import escape
 from datetime import date
 import time
+from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,7 @@ from src.services.payments import create_upgrade_checkout
 from src.services.submissions import submit_player_record
 from src.services.users import (
     ensure_profile,
+    get_public_profile_index,
     get_profile_overview,
     get_user_entitlement,
     update_user_profile,
@@ -36,7 +38,7 @@ from src.services.users import (
     profile_has_location,
 )
 from src.validation.submissions import BRAZILIAN_STATES
-from src.validation.profiles import COUNTRIES, validate_profile_fields
+from src.validation.profiles import COUNTRIES, normalize_nickname_match_key, validate_profile_fields
 
 
 st.set_page_config(
@@ -109,6 +111,11 @@ def get_profile_overview_cached(user_id, profile_updated_at=None):
     return get_profile_overview(user_id)
 
 
+@st.cache_data(show_spinner=False, ttl=300)
+def get_public_profile_index_cached():
+    return get_public_profile_index()
+
+
 def ui_html(markup):
     st.html(markup)
 
@@ -129,6 +136,7 @@ def clear_curation_caches():
 
 def clear_profile_caches():
     get_profile_overview_cached.clear()
+    get_public_profile_index_cached.clear()
 
 
 def render_feedback(result, success_message, info_message=None):
@@ -1585,6 +1593,36 @@ def inject_css():
 
     .rb-table tbody tr:hover {{
         background: rgba(127,163,90,0.09);
+    }}
+
+    .player-profile-link {{
+        display: inline-flex;
+        align-items: center;
+        gap: 0.34rem;
+        min-height: 34px;
+        color: var(--rb-text);
+        font-weight: 900;
+        text-decoration: none;
+        border-bottom: 1px solid rgba(244,201,93,0.36);
+        transition: color 160ms ease, border-color 160ms ease, text-shadow 160ms ease;
+    }}
+
+    .player-profile-link::after {{
+        content: "↗";
+        color: var(--rb-gold);
+        font-size: 0.68rem;
+        line-height: 1;
+        opacity: 0.86;
+    }}
+
+    .player-profile-link:hover {{
+        color: var(--rb-gold);
+        border-color: rgba(127,163,90,0.62);
+        text-shadow: 0 0 16px rgba(244,201,93,0.16);
+    }}
+
+    .player-profile-disabled {{
+        color: var(--rb-text);
     }}
 
     .rb-table tr.top-10 td {{
@@ -3166,10 +3204,11 @@ def render_chart(data, player_options, default_players):
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 
-def table_html(data):
+def table_html(data, public_profile_index=None):
     if data.empty:
         return '<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>'
 
+    public_profile_index = public_profile_index or {}
     header = "".join(f"<th>{escape(str(column))}</th>" for column in data.columns)
     rows = []
 
@@ -3178,10 +3217,21 @@ def table_html(data):
         row_class = "top-10" if rank <= 10 else ""
         cells = []
         for column in data.columns:
-            value = escape(str(row[column]))
+            raw_value = row[column]
+            value = escape(str(raw_value))
             if column == "#":
                 medal_class = " medal" if rank <= 3 else ""
                 value = f'<span class="rank-pill{medal_class}">{rank}</span>'
+            elif column == "Jogador":
+                match_key = normalize_nickname_match_key(raw_value)
+                if match_key in public_profile_index:
+                    href = f'?player={quote(str(raw_value).strip(), safe="")}'
+                    value = (
+                        f'<a class="player-profile-link" href="{href}" target="_self" '
+                        f'title="Abrir perfil publico de {value}">{value}</a>'
+                    )
+                else:
+                    value = f'<span class="player-profile-disabled" title="Perfil ainda nao disponivel">{value}</span>'
             cells.append(f"<td>{value}</td>")
         rows.append(f'<tr class="{row_class}">{"".join(cells)}</tr>')
 
@@ -3253,7 +3303,7 @@ def render_pagination_controls(page_key, page_count, key_prefix):
     return current
 
 
-def render_paginated_table(title, data, key):
+def render_paginated_table(title, data, key, public_profile_index=None):
     st.markdown(f"#### {title}")
     page_size = 10
     page_count = max(1, int(np.ceil(len(data) / page_size)))
@@ -3271,7 +3321,7 @@ def render_paginated_table(title, data, key):
 
     start = current_page_index * page_size
     page = data.iloc[start:start + page_size]
-    ui_html(table_html(page))
+    ui_html(table_html(page, public_profile_index))
 
 
 def render_filters(data):
@@ -3446,6 +3496,45 @@ def format_signed_compact(value):
     return f"{prefix}{format_compact(value)}"
 
 
+def get_query_param_value(name):
+    value = st.query_params.get(name, "")
+    if isinstance(value, list):
+        return str(value[0] if value else "").strip()
+    return str(value or "").strip()
+
+
+def load_public_profile_index_safely():
+    try:
+        return get_public_profile_index_cached()
+    except Exception:
+        return {}
+
+
+def resolve_selected_public_profile(public_profile_index):
+    requested_nickname = get_query_param_value("player")
+    if not requested_nickname:
+        return None
+
+    profile = public_profile_index.get(normalize_nickname_match_key(requested_nickname))
+    if not profile:
+        st.session_state.pop("selected_player_nickname", None)
+        return None
+
+    st.session_state["selected_player_nickname"] = str(profile.get("nickname") or requested_nickname).strip()
+    st.session_state["current_page"] = "player_profile"
+    return profile
+
+
+def clear_player_profile_navigation():
+    st.session_state.pop("selected_player_nickname", None)
+    st.session_state["current_page"] = "dashboard"
+    params = dict(st.query_params)
+    params.pop("player", None)
+    st.query_params.clear()
+    for key, value in params.items():
+        st.query_params[key] = value
+
+
 def calculate_activity_streak(history):
     if not history:
         return 0
@@ -3538,6 +3627,208 @@ def build_profile_insights(profile, stats, history, entitlement, dashboard_data)
         medals.append(("Streak", f"{insights['activity_streak']} dias de atividade"))
     insights["medals"] = medals[:6] or [("Primeiro passo", "Envie seu primeiro registro")]
     return insights
+
+
+def build_public_player_insights(public_profile, dashboard_data):
+    nickname = str(public_profile.get("nickname") or "").strip()
+    player_key = normalize_nickname_match_key(nickname)
+    insights = {
+        "nickname": nickname or "Jogador",
+        "location": "Localidade nao informada",
+        "plan": "Premium" if public_profile.get("is_premium") else "Free",
+        "rank": "-",
+        "state": str(public_profile.get("estado") or "").strip().upper() or "-",
+        "latest_catches": 0,
+        "daily_average": 0,
+        "monthly_delta": 0,
+        "records": 0,
+        "first_date": None,
+        "last_date": None,
+        "history": pd.DataFrame(),
+        "activities": [],
+        "medals": [("Em breve", "Aguardando metricas competitivas publicas")],
+    }
+
+    location_parts = [
+        str(public_profile.get("cidade") or "").strip(),
+        str(public_profile.get("estado") or "").strip(),
+        str(public_profile.get("pais") or "").strip(),
+    ]
+    location = " · ".join(part for part in location_parts if part)
+    if location:
+        insights["location"] = location
+
+    if not player_key or dashboard_data is None or dashboard_data.empty:
+        return insights
+
+    nickname_keys = dashboard_data["nickname"].map(normalize_nickname_match_key)
+    player_rows = dashboard_data[nickname_keys == player_key].sort_values("date").copy()
+    if player_rows.empty:
+        return insights
+
+    latest = player_rows.iloc[-1]
+    first = player_rows.iloc[0]
+    latest_catches = int(latest.get("catches") or 0)
+    insights["history"] = player_rows
+    insights["activities"] = player_rows.tail(5).iloc[::-1].to_dict("records")
+    insights["records"] = int(len(player_rows))
+    insights["state"] = str(latest.get("state") or insights["state"]).strip().upper() or "-"
+    insights["latest_catches"] = latest_catches
+    insights["first_date"] = first.get("date")
+    insights["last_date"] = latest.get("date")
+
+    base = get_best_catches(dashboard_data)
+    ranked_keys = base["nickname"].map(normalize_nickname_match_key)
+    matched = base[ranked_keys == player_key]
+    if not matched.empty:
+        insights["rank"] = f"#{int(matched.iloc[0].get('position') or 0)}"
+
+    if len(player_rows) >= 2:
+        days = max(1, int((player_rows["date"].iloc[-1] - player_rows["date"].iloc[0]).days))
+        insights["daily_average"] = max(0, int((latest_catches - int(first.get("catches") or 0)) / days))
+
+        max_date = player_rows["date"].max()
+        current_window = player_rows[player_rows["date"] >= max_date - pd.Timedelta(days=30)]
+        previous_window = player_rows[
+            (player_rows["date"] < max_date - pd.Timedelta(days=30))
+            & (player_rows["date"] >= max_date - pd.Timedelta(days=60))
+        ]
+        if len(current_window) >= 2:
+            insights["monthly_delta"] = int(current_window["catches"].iloc[-1] - current_window["catches"].iloc[0])
+        elif not previous_window.empty:
+            insights["monthly_delta"] = int(player_rows["catches"].iloc[-1] - previous_window["catches"].iloc[-1])
+
+    medals = []
+    rank_number = int(str(insights["rank"]).replace("#", "") or 0) if insights["rank"] != "-" else 0
+    if rank_number and rank_number <= 10:
+        medals.append(("Top 10", "Entre os lideres nacionais"))
+    elif rank_number and rank_number <= 50:
+        medals.append(("Top 50", "Destaque no ranking nacional"))
+    if latest_catches >= 1_000_000:
+        medals.append(("1M+", "Mais de 1 milhao de capturas"))
+    if insights["records"] >= 6:
+        medals.append(("Historico", "Serie publica com 6+ atualizacoes"))
+    if public_profile.get("is_premium"):
+        medals.append(("Premium", "Plano premium ativo"))
+    if location:
+        medals.append(("Perfil publico", "Localidade competitiva informada"))
+    medals.append(("Medalhas futuras", "Novas conquistas entram com as proximas metricas"))
+    insights["medals"] = medals[:6]
+    return insights
+
+
+def render_public_player_profile(public_profile, dashboard_data):
+    insights = build_public_player_insights(public_profile, dashboard_data)
+    avatar = trainer_avatar(insights["nickname"], int(str(insights["rank"]).replace("#", "") or 1) if insights["rank"] != "-" else 1)
+    medals_html = "".join(
+        f"""
+        <article class="achievement-card">
+            <div class="achievement-badge">{escape(title[:2].upper())}</div>
+            <div>
+                <div class="achievement-title">{escape(title)}</div>
+                <div class="achievement-copy">{escape(copy)}</div>
+            </div>
+        </article>
+        """
+        for title, copy in insights["medals"]
+    )
+    activities_html = "".join(
+        f"""
+        <div class="activity-row">
+            <span>{format_date_value(row.get("date"))}</span>
+            <strong>{format_int(row.get("catches") or 0)} capturas</strong>
+            <em>{escape(str(row.get("state") or insights["state"]))}</em>
+        </div>
+        """
+        for row in insights["activities"]
+    ) or '<div class="empty-state compact">Nenhuma atualizacao publica encontrada para este jogador.</div>'
+
+    if st.button("Voltar para ranking", key="public_player_back", on_click=clear_player_profile_navigation):
+        st.rerun()
+
+    ui_html(f"""
+        <section class="profile-hero-modern section-anchor" id="perfil-jogador">
+            <div class="profile-identity">
+                <div class="profile-avatar">{avatar}</div>
+                <div>
+                    <div class="eyebrow">Perfil publico do jogador</div>
+                    <h1 class="profile-name">{escape(insights["nickname"])}</h1>
+                    <div class="profile-location">{escape(insights["location"])}</div>
+                    <div class="profile-meta">
+                        <span>{escape(insights["plan"])}</span>
+                        <span>Entrada {format_date_value(public_profile.get("created_at"))}</span>
+                        <span>Atualizado {format_date_value(insights["last_date"])}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <div class="profile-metric-grid">
+            <article class="profile-metric">
+                <div class="profile-metric-label">Ranking atual</div>
+                <div class="profile-metric-value">{escape(insights["rank"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Capturas</div>
+                <div class="profile-metric-value">{format_compact(insights["latest_catches"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Media diaria</div>
+                <div class="profile-metric-value">{format_compact(insights["daily_average"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Evolucao mensal</div>
+                <div class="profile-metric-value">{format_signed_compact(insights["monthly_delta"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Estado</div>
+                <div class="profile-metric-value">{escape(insights["state"])}</div>
+            </article>
+            <article class="profile-metric">
+                <div class="profile-metric-label">Atualizacoes publicas</div>
+                <div class="profile-metric-value">{format_int(insights["records"])}</div>
+            </article>
+        </div>
+    """)
+
+    history = insights["history"]
+    if isinstance(history, pd.DataFrame) and len(history) >= 2:
+        fig = go.Figure()
+        fig.add_trace(go.Scattergl(
+            x=history["date"],
+            y=history["catches"],
+            mode="lines+markers",
+            name=insights["nickname"],
+            line=dict(width=3, color="#f4c95d"),
+            marker=dict(size=6, color="#7fa35a", line=dict(width=1.2, color="rgba(255,255,255,0.34)")),
+            hovertemplate="<b>%{fullData.name}</b><br>%{x|%d/%m/%Y}<br>%{y:,.0f} capturas<extra></extra>",
+        ))
+        fig.update_layout(
+            template="plotly_dark",
+            height=380,
+            margin=dict(l=10, r=10, t=30, b=8),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(16,17,12,0.28)",
+            font=dict(color="#f0efff", family="Inter, Segoe UI, Arial"),
+            xaxis=dict(showgrid=True, gridcolor="rgba(240,218,159,0.08)", zeroline=False),
+            yaxis=dict(showgrid=True, gridcolor="rgba(240,218,159,0.08)", zeroline=False, tickformat=","),
+            hoverlabel=dict(bgcolor="#241b13", bordercolor="#e2b84f", font_size=13),
+        )
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
+    else:
+        ui_html('<div class="empty-state compact">Evolucao historica sera exibida quando houver pelo menos duas atualizacoes publicas.</div>')
+
+    ui_html(f"""
+        <div class="premium-grid">
+            <div class="premium-panel">
+                <div class="premium-card-label">Conquistas</div>
+                <div class="achievement-grid">{medals_html}</div>
+            </div>
+            <div class="premium-panel">
+                <div class="premium-card-label">Ultimas atualizacoes</div>
+                <div class="activity-list">{activities_html}</div>
+            </div>
+        </div>
+    """)
 
 
 def curation_status_label(status: str) -> str:
@@ -4077,10 +4368,14 @@ def render_premium_page(profile):
 
 inject_css()
 session, profile = require_authenticated_user()
+public_profile_index = load_public_profile_index_safely()
+selected_public_player = resolve_selected_public_profile(public_profile_index)
 page_param = str(st.query_params.get("page", "")).strip().lower()
 page_options = ["Dashboard", "Perfil", "Premium"]
 if user_is_admin(profile):
     page_options.append("Curadoria")
+if selected_public_player:
+    page_options.append("Perfil do jogador")
 
 if page_param in {"perfil", "profile", "enviar", "enviar-dados", "submit"}:
     default_page = "Perfil"
@@ -4088,6 +4383,8 @@ elif page_param in {"premium", "upgrade"}:
     default_page = "Premium"
 elif page_param in {"curadoria", "admin"} and "Curadoria" in page_options:
     default_page = "Curadoria"
+elif selected_public_player:
+    default_page = "Perfil do jogador"
 else:
     default_page = "Dashboard"
 
@@ -4107,6 +4404,20 @@ if current_page == "Premium":
 
 if current_page == "Curadoria":
     render_curation_page(profile)
+    render_footer()
+    st.stop()
+
+if current_page == "Perfil do jogador":
+    if not selected_public_player:
+        st.info("Perfil publico ainda nao disponivel para este jogador.")
+        if st.button("Voltar para ranking", key="public_player_missing_back", on_click=clear_player_profile_navigation):
+            st.rerun()
+        render_footer()
+        st.stop()
+    with st.spinner("Carregando perfil publico..."):
+        fingerprint = get_data_fingerprint_cached()
+        df = get_data(fingerprint)
+    render_public_player_profile(selected_public_player, df)
     render_footer()
     st.stop()
 
@@ -4147,11 +4458,21 @@ with st.container(key="rankings_section"):
     ranking_col, average_col = st.columns(2)
     with ranking_col:
         with st.container(key="ranking_general_panel"):
-            render_paginated_table("Ranking geral por capturas totais", build_general_ranking(filtered_df), "ranking_general")
+            render_paginated_table(
+                "Ranking geral por capturas totais",
+                build_general_ranking(filtered_df),
+                "ranking_general",
+                public_profile_index,
+            )
 
     with average_col:
         with st.container(key="ranking_average_panel"):
-            render_paginated_table("Ranking por média diária", build_average_ranking(filtered_df, somente_melhor, apenas_mensais), "ranking_average")
+            render_paginated_table(
+                "Ranking por média diária",
+                build_average_ranking(filtered_df, somente_melhor, apenas_mensais),
+                "ranking_average",
+                public_profile_index,
+            )
 
 filtered_base = get_best_catches(filtered_df)
 

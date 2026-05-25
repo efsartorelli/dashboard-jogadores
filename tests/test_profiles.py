@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from src.services.users import ensure_profile, profile_has_location, update_user_profile
-from src.validation.profiles import validate_profile_fields
+from src.services.users import ensure_profile, get_public_profile_index, profile_has_location, update_user_profile
+from src.validation.profiles import normalize_nickname_match_key, validate_profile_fields
 
 
 class FakeConn:
@@ -32,6 +32,10 @@ class ProfileValidationTest(unittest.TestCase):
 
         self.assertTrue(any("Nickname" in error for error in errors))
         self.assertTrue(any("Cidade" in error for error in errors))
+
+    def test_nickname_match_key_is_case_space_and_accent_insensitive(self):
+        self.assertEqual(normalize_nickname_match_key("  Kendo4687  "), "kendo4687")
+        self.assertEqual(normalize_nickname_match_key("Ásh Ketchum"), "ash ketchum")
 
     def test_profile_location_completion(self):
         self.assertTrue(profile_has_location({"pais": "Brasil", "estado": "SP", "cidade": "Sao Paulo"}))
@@ -77,6 +81,28 @@ class ProfileValidationTest(unittest.TestCase):
                 )
 
         update_profile.assert_not_called()
+
+    def test_public_profile_index_uses_only_public_fields_by_normalized_nickname(self):
+        conn = FakeConn()
+        public_rows = [
+            {
+                "nickname": " Kendo4687 ",
+                "email": "private@example.com",
+                "pais": "Brasil",
+                "estado": "SP",
+                "cidade": "Sao Paulo",
+                "is_premium": True,
+                "premium_status": "premium",
+                "created_at": "2026-05-01",
+                "updated_at": "2026-05-02",
+            }
+        ]
+        with patch("src.services.users.listar_perfis_publicos_usuario", return_value=public_rows):
+            profiles = get_public_profile_index(conn=conn)
+
+        self.assertIn("kendo4687", profiles)
+        self.assertEqual(profiles["kendo4687"]["nickname"], " Kendo4687 ")
+        self.assertNotIn("email", profiles["kendo4687"])
 
 
 if __name__ == "__main__":

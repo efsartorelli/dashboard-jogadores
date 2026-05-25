@@ -12,6 +12,7 @@ from src.database.repositories import (
     buscar_usuario_por_id,
     contar_inputs_usuario_mes,
     estatisticas_inputs_usuario,
+    listar_perfis_publicos_usuario,
     listar_inputs_usuario,
     listar_pagamentos_usuario,
     tocar_ultimo_acesso_usuario,
@@ -21,6 +22,7 @@ from src.validation.submissions import sanitize_text
 from src.validation.profiles import (
     normalize_city,
     normalize_country,
+    normalize_nickname_match_key,
     normalize_profile_nickname,
     normalize_profile_state,
     profile_location_is_complete,
@@ -240,6 +242,32 @@ def get_profile_overview(user_id: str, conn=None) -> dict[str, Any]:
             "payments": payments,
             "entitlement": entitlement,
         }
+    finally:
+        if owns_connection and context is not None:
+            context.__exit__(None, None, None)
+
+
+def get_public_profile_index(conn=None) -> dict[str, dict[str, Any]]:
+    owns_connection = conn is None
+    context = get_connection() if owns_connection else None
+    if owns_connection:
+        conn = context.__enter__()
+    try:
+        profiles: dict[str, dict[str, Any]] = {}
+        for profile in listar_perfis_publicos_usuario(conn):
+            key = normalize_nickname_match_key(profile.get("nickname"))
+            if key and key not in profiles:
+                profiles[key] = {
+                    "nickname": profile.get("nickname"),
+                    "pais": profile.get("pais"),
+                    "estado": profile.get("estado"),
+                    "cidade": profile.get("cidade"),
+                    "is_premium": bool(profile.get("is_premium")),
+                    "premium_status": profile.get("premium_status"),
+                    "created_at": profile.get("created_at"),
+                    "updated_at": profile.get("updated_at"),
+                }
+        return profiles
     finally:
         if owns_connection and context is not None:
             context.__exit__(None, None, None)

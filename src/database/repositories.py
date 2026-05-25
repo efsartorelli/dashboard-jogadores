@@ -548,6 +548,27 @@ def buscar_usuario_por_id(conn, user_id: str) -> dict[str, Any] | None:
     )
 
 
+def listar_perfis_publicos_usuario(conn) -> list[dict[str, Any]]:
+    return _fetchall(
+        conn,
+        """
+        SELECT
+            nickname,
+            pais,
+            estado,
+            cidade,
+            is_premium,
+            premium_status,
+            created_at,
+            updated_at
+        FROM usuarios
+        WHERE nickname IS NOT NULL
+          AND btrim(nickname) <> ''
+        ORDER BY nickname
+        """,
+    )
+
+
 def upsert_usuario_profile(
     conn,
     user_id: str,

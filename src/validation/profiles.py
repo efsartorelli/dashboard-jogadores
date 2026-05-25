@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from src.validation.submissions import BRAZILIAN_STATES, sanitize_text
 
@@ -14,6 +15,12 @@ _NICKNAME_RE = re.compile(r"^[A-Za-z0-9_. -]+$")
 
 def normalize_profile_nickname(value: object) -> str:
     return sanitize_text(value, max_length=NICKNAME_MAX_LENGTH)
+
+
+def normalize_nickname_match_key(value: object) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or "").strip())
+    without_accents = "".join(char for char in normalized if not unicodedata.combining(char))
+    return " ".join(without_accents.casefold().split())
 
 
 def normalize_country(value: object) -> str:
