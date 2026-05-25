@@ -1,7 +1,6 @@
 from html import escape
 from datetime import date
 import time
-from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -9,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.auth import AuthError, AuthSession, get_auth_client
-from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, SUPABASE_AUTH_REDIRECT_URL, get_setting, validate_required_settings
+from src.config import AUTH_SESSION_VALIDATE_INTERVAL_SECONDS, DATA_SOURCE, ENABLE_PREMIUM, SUPABASE_AUTH_REDIRECT_URL, get_setting, validate_required_settings
 from src.database.connection import DatabaseUnavailable, has_database_config
 from src.metrics.averages import build_average_ranking as compute_average_ranking
 from src.metrics.distribution import build_distribution as compute_distribution
@@ -345,10 +344,13 @@ def require_authenticated_user() -> tuple[AuthSession, dict]:
         profile = ensure_profile(session.user)
         st.session_state.current_profile = profile
         return session, profile
-    except (AuthError, DatabaseUnavailable, Exception) as exc:
+    except AuthError as exc:
         clear_auth_session()
         st.error(f"Sessao encerrada ou configuracao incompleta: {exc}")
         render_auth_page()
+        st.stop()
+    except (DatabaseUnavailable, Exception) as exc:
+        st.error(f"Nao foi possivel validar o perfil agora: {exc}")
         st.stop()
 
 
@@ -1595,29 +1597,24 @@ def inject_css():
         background: rgba(127,163,90,0.09);
     }}
 
-    .player-profile-link {{
-        display: inline-flex;
-        align-items: center;
-        gap: 0.34rem;
+    .st-key-ranking_general_native_table button[kind="secondary"],
+    .st-key-ranking_average_native_table button[kind="secondary"] {{
         min-height: 34px;
-        color: var(--rb-text);
-        font-weight: 900;
-        text-decoration: none;
-        border-bottom: 1px solid rgba(244,201,93,0.36);
-        transition: color 160ms ease, border-color 160ms ease, text-shadow 160ms ease;
+        padding: 0.15rem 0 !important;
+        border: 0 !important;
+        border-bottom: 1px solid rgba(244,201,93,0.36) !important;
+        border-radius: 0 !important;
+        color: var(--rb-text) !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        font-weight: 900 !important;
+        text-align: left !important;
     }}
 
-    .player-profile-link::after {{
-        content: "↗";
-        color: var(--rb-gold);
-        font-size: 0.68rem;
-        line-height: 1;
-        opacity: 0.86;
-    }}
-
-    .player-profile-link:hover {{
-        color: var(--rb-gold);
-        border-color: rgba(127,163,90,0.62);
+    .st-key-ranking_general_native_table button[kind="secondary"]:hover,
+    .st-key-ranking_average_native_table button[kind="secondary"]:hover {{
+        color: var(--rb-gold) !important;
+        border-bottom-color: rgba(127,163,90,0.62) !important;
         text-shadow: 0 0 16px rgba(244,201,93,0.16);
     }}
 
@@ -3204,11 +3201,19 @@ def render_chart(data, player_options, default_players):
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 
-def table_html(data, public_profile_index=None):
+def open_player_profile(nickname):
+    selected = str(nickname or "").strip()
+    if not selected:
+        return
+    st.session_state["selected_player_nickname"] = selected
+    st.session_state["current_page"] = "player_profile"
+    st.session_state["last_rankings_anchor"] = "rankings"
+
+
+def table_html(data):
     if data.empty:
         return '<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>'
 
-    public_profile_index = public_profile_index or {}
     header = "".join(f"<th>{escape(str(column))}</th>" for column in data.columns)
     rows = []
 
@@ -3222,16 +3227,6 @@ def table_html(data, public_profile_index=None):
             if column == "#":
                 medal_class = " medal" if rank <= 3 else ""
                 value = f'<span class="rank-pill{medal_class}">{rank}</span>'
-            elif column == "Jogador":
-                match_key = normalize_nickname_match_key(raw_value)
-                if match_key in public_profile_index:
-                    href = f'?player={quote(str(raw_value).strip(), safe="")}'
-                    value = (
-                        f'<a class="player-profile-link" href="{href}" target="_self" '
-                        f'title="Abrir perfil publico de {value}">{value}</a>'
-                    )
-                else:
-                    value = f'<span class="player-profile-disabled" title="Perfil ainda nao disponivel">{value}</span>'
             cells.append(f"<td>{value}</td>")
         rows.append(f'<tr class="{row_class}">{"".join(cells)}</tr>')
 
@@ -3243,6 +3238,54 @@ def table_html(data, public_profile_index=None):
             </table>
         </div>
     """
+
+
+def render_interactive_ranking_table(data, key_prefix, public_profile_index):
+    if data.empty:
+        ui_html('<div class="empty-state">Nenhum resultado encontrado com os filtros atuais.</div>')
+        return
+
+    with st.container(key=f"{key_prefix}_native_table"):
+        columns = list(data.columns)
+        width_map = {
+            "#": 0.12,
+            "Jogador": 0.34,
+            "Estado": 0.15,
+            "Capturas": 0.22,
+            "Dias ativo": 0.17,
+            "Média": 0.20,
+            "Período": 0.20,
+        }
+        column_widths = [width_map.get(str(column), 0.18) for column in columns]
+
+        header_cols = st.columns(column_widths, vertical_alignment="center")
+        for col, label in zip(header_cols, columns):
+            with col:
+                st.caption(str(label))
+
+        for row_index, (_, row) in enumerate(data.iterrows()):
+            rank = int(row["#"]) if "#" in row else row_index + 1
+            row_cols = st.columns(column_widths, vertical_alignment="center")
+            for col, column in zip(row_cols, columns):
+                raw_value = row[column]
+                with col:
+                    if column == "#":
+                        medal_class = " medal" if rank <= 3 else ""
+                        ui_html(f'<span class="rank-pill{medal_class}">{rank}</span>')
+                    elif column == "Jogador":
+                        nickname = str(raw_value or "").strip()
+                        if normalize_nickname_match_key(nickname) in public_profile_index:
+                            st.button(
+                                nickname,
+                                key=f"{key_prefix}_player_{row_index}_{normalize_nickname_match_key(nickname)}",
+                                help=f"Abrir perfil publico de {nickname}",
+                                on_click=open_player_profile,
+                                args=(nickname,),
+                            )
+                        else:
+                            ui_html(f'<span class="player-profile-disabled" title="Perfil ainda nao disponivel">{escape(nickname)}</span>')
+                    else:
+                        st.write(str(raw_value))
 
 
 def clamp_page_index(value, page_count):
@@ -3321,7 +3364,10 @@ def render_paginated_table(title, data, key, public_profile_index=None):
 
     start = current_page_index * page_size
     page = data.iloc[start:start + page_size]
-    ui_html(table_html(page, public_profile_index))
+    if public_profile_index is not None:
+        render_interactive_ranking_table(page, key, public_profile_index)
+    else:
+        ui_html(table_html(page))
 
 
 def render_filters(data):
@@ -3511,7 +3557,10 @@ def load_public_profile_index_safely():
 
 
 def resolve_selected_public_profile(public_profile_index):
-    requested_nickname = get_query_param_value("player")
+    requested_nickname = (
+        str(st.session_state.get("selected_player_nickname") or "").strip()
+        or get_query_param_value("player")
+    )
     if not requested_nickname:
         return None
 
@@ -3528,6 +3577,7 @@ def resolve_selected_public_profile(public_profile_index):
 def clear_player_profile_navigation():
     st.session_state.pop("selected_player_nickname", None)
     st.session_state["current_page"] = "dashboard"
+    st.session_state["last_rankings_anchor"] = "rankings"
     params = dict(st.query_params)
     params.pop("player", None)
     st.query_params.clear()
@@ -4371,7 +4421,10 @@ session, profile = require_authenticated_user()
 public_profile_index = load_public_profile_index_safely()
 selected_public_player = resolve_selected_public_profile(public_profile_index)
 page_param = str(st.query_params.get("page", "")).strip().lower()
-page_options = ["Dashboard", "Perfil", "Premium"]
+premium_enabled_for_user = ENABLE_PREMIUM or bool(profile.get("is_premium"))
+page_options = ["Dashboard", "Perfil"]
+if premium_enabled_for_user:
+    page_options.append("Premium")
 if user_is_admin(profile):
     page_options.append("Curadoria")
 if selected_public_player:
@@ -4379,7 +4432,7 @@ if selected_public_player:
 
 if page_param in {"perfil", "profile", "enviar", "enviar-dados", "submit"}:
     default_page = "Perfil"
-elif page_param in {"premium", "upgrade"}:
+elif page_param in {"premium", "upgrade"} and premium_enabled_for_user:
     default_page = "Premium"
 elif page_param in {"curadoria", "admin"} and "Curadoria" in page_options:
     default_page = "Curadoria"
@@ -4398,6 +4451,10 @@ if current_page == "Perfil":
     st.stop()
 
 if current_page == "Premium":
+    if not premium_enabled_for_user:
+        st.info("Premium em breve.")
+        render_footer()
+        st.stop()
     render_premium_page(profile)
     render_footer()
     st.stop()
