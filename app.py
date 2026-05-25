@@ -3546,7 +3546,7 @@ def render_hero(base, historical_data):
                             </svg>
                         </div>
                         <div class="stat-label">Capturas analisadas</div>
-                        <div class="stat-value">{format_compact(capturas)}</div>
+                        <div class="stat-value">{format_hero_stat_compact(capturas)}</div>
                     </article>
                     <article class="stat-card">
                         <div class="stat-icon" aria-hidden="true">
@@ -4027,6 +4027,22 @@ def format_signed_compact(value):
     value = float(value or 0)
     prefix = "+" if value > 0 else ""
     return f"{prefix}{format_compact(value)}"
+
+
+def format_hero_stat_compact(value):
+    value = float(value or 0)
+    abs_value = abs(value)
+    units = (
+        (1_000_000_000, "B"),
+        (1_000_000, "M"),
+        (1_000, "K"),
+    )
+    for divisor, suffix in units:
+        if abs_value >= divisor:
+            compact = value / divisor
+            text = f"{compact:.1f}".rstrip("0").rstrip(".")
+            return f"{text}{suffix}"
+    return format_int(value)
 
 
 def medal_icon_svg(icon_type):
