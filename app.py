@@ -94,6 +94,8 @@ get_setting = getattr(app_config, "get_setting", fallback_get_setting)
 validate_required_settings = getattr(app_config, "validate_required_settings", fallback_validate_required_settings)
 AUTH_SESSION_VALIDATE_INTERVAL_SECONDS = int(getattr(app_config, "AUTH_SESSION_VALIDATE_INTERVAL_SECONDS", 300) or 300)
 DATA_SOURCE = str(getattr(app_config, "DATA_SOURCE", "auto") or "auto").strip().lower()
+SUPABASE_URL = str(getattr(app_config, "SUPABASE_URL", "") or get_setting("SUPABASE_URL", "") or "").rstrip("/")
+SUPABASE_ANON_KEY = str(getattr(app_config, "SUPABASE_ANON_KEY", "") or get_setting("SUPABASE_ANON_KEY", "") or "")
 SUPABASE_AUTH_REDIRECT_URL = str(
     getattr(app_config, "SUPABASE_AUTH_REDIRECT_URL", PRODUCTION_APP_URL_FALLBACK)
     or PRODUCTION_APP_URL_FALLBACK
@@ -396,8 +398,6 @@ def inject_recovery_hash_bridge() -> None:
 
 
 def render_reset_password_page():
-    inject_recovery_hash_bridge()
-
     ui_html("""
         <section class="auth-page section-anchor">
             <div class="auth-brand">
@@ -423,7 +423,134 @@ def render_reset_password_page():
 
     access_token = get_reset_access_token_from_query()
     if not access_token:
-        st.info("Validando link de recuperacao. Se esta mensagem continuar, abra novamente o link recebido por email.")
+        components.html(
+            f"""
+            <div style="font-family: Inter, Segoe UI, Arial, sans-serif; color:#f6f1d5;">
+                <style>
+                    .reset-card {{
+                        max-width: 520px;
+                        margin: 0 auto;
+                        padding: 18px;
+                        border: 1px solid rgba(80, 151, 126, 0.28);
+                        border-radius: 8px;
+                        background: rgba(7, 12, 10, 0.78);
+                    }}
+                    .reset-label {{
+                        display: block;
+                        margin: 12px 0 6px;
+                        color: #f6f1d5;
+                        font-size: 13px;
+                        font-weight: 700;
+                    }}
+                    .reset-input {{
+                        width: 100%;
+                        box-sizing: border-box;
+                        padding: 11px 12px;
+                        border: 1px solid rgba(246, 241, 213, 0.18);
+                        border-radius: 7px;
+                        color: #f6f1d5;
+                        background: #07100f;
+                        outline: none;
+                    }}
+                    .reset-button {{
+                        margin-top: 16px;
+                        padding: 10px 14px;
+                        border: 1px solid rgba(244, 201, 93, 0.55);
+                        border-radius: 7px;
+                        color: #171207;
+                        background: #f4c95d;
+                        font-weight: 800;
+                        cursor: pointer;
+                    }}
+                    .reset-message {{
+                        margin-top: 12px;
+                        padding: 10px 12px;
+                        border-radius: 7px;
+                        font-size: 13px;
+                        line-height: 1.35;
+                    }}
+                    .reset-error {{
+                        color: #ffd7d7;
+                        background: rgba(144, 36, 36, 0.28);
+                        border: 1px solid rgba(255, 130, 130, 0.25);
+                    }}
+                    .reset-success {{
+                        color: #d9ffe6;
+                        background: rgba(46, 125, 75, 0.26);
+                        border: 1px solid rgba(108, 214, 139, 0.25);
+                    }}
+                </style>
+                <div class="reset-card">
+                    <label class="reset-label" for="new-password">Nova senha</label>
+                    <input class="reset-input" id="new-password" type="password" autocomplete="new-password" />
+                    <label class="reset-label" for="confirm-password">Confirmar nova senha</label>
+                    <input class="reset-input" id="confirm-password" type="password" autocomplete="new-password" />
+                    <button class="reset-button" id="save-password" type="button">Salvar nova senha</button>
+                    <div id="reset-message" class="reset-message" style="display:none;"></div>
+                </div>
+                <script>
+                    const supabaseUrl = {SUPABASE_URL!r};
+                    const anonKey = {SUPABASE_ANON_KEY!r};
+                    const parentLocation = (window.parent || window).location;
+                    const hash = parentLocation.hash ? parentLocation.hash.substring(1) : "";
+                    const hashParams = new URLSearchParams(hash);
+                    const accessToken = hashParams.get("access_token");
+                    const message = document.getElementById("reset-message");
+                    const button = document.getElementById("save-password");
+
+                    function showMessage(text, type) {{
+                        message.textContent = text;
+                        message.className = "reset-message " + (type === "success" ? "reset-success" : "reset-error");
+                        message.style.display = "block";
+                    }}
+
+                    if (!accessToken) {{
+                        showMessage("Link de recuperacao invalido ou expirado. Solicite um novo email de recuperacao.", "error");
+                        button.disabled = true;
+                    }}
+
+                    button.addEventListener("click", async () => {{
+                        const password = document.getElementById("new-password").value;
+                        const confirm = document.getElementById("confirm-password").value;
+                        if (password.length < 8) {{
+                            showMessage("Use uma senha com pelo menos 8 caracteres.", "error");
+                            return;
+                        }}
+                        if (password !== confirm) {{
+                            showMessage("As senhas nao conferem.", "error");
+                            return;
+                        }}
+                        button.disabled = true;
+                        button.textContent = "Salvando...";
+                        try {{
+                            const response = await fetch(`${{supabaseUrl}}/auth/v1/user`, {{
+                                method: "PUT",
+                                headers: {{
+                                    "Content-Type": "application/json",
+                                    "apikey": anonKey,
+                                    "Authorization": `Bearer ${{accessToken}}`
+                                }},
+                                body: JSON.stringify({{ password }})
+                            }});
+                            if (!response.ok) {{
+                                throw new Error("update_failed");
+                            }}
+                            showMessage("Senha alterada com sucesso. Voce ja pode fazer login novamente.", "success");
+                            parentLocation.hash = "";
+                            setTimeout(() => {{
+                                parentLocation.href = "{build_auth_redirect_url()}?page=login";
+                            }}, 1800);
+                        }} catch (error) {{
+                            button.disabled = false;
+                            button.textContent = "Salvar nova senha";
+                            showMessage("Nao foi possivel alterar a senha. Solicite um novo email de recuperacao.", "error");
+                        }}
+                    }});
+                </script>
+            </div>
+            """,
+            height=360,
+        )
         return
 
     with st.container(key="auth_reset_shell"):
