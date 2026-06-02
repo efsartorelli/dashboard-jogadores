@@ -803,8 +803,8 @@ def render_auth_page():
                         session = client.sign_in(email, password)
                         store_auth_session(session)
                         st.rerun()
-                    except AuthError as exc:
-                        st.error(friendly_auth_error(exc))
+                    except AuthError:
+                        st.error("Email ou senha incorretos. Verifique os dados e tente novamente.")
 
         with signup_tab:
             with st.container(key="auth_signup_shell"):
