@@ -4539,8 +4539,7 @@ def render_chart(data, player_options, default_players):
                 name=player,
                 line=dict(width=3, color=trace_color),
                 marker=dict(size=6, line=dict(width=1.3, color="rgba(255,255,255,0.38)")),
-                hovertemplate=None,
-                hoverinfo="skip",
+                hovertemplate="<b>%{fullData.name}</b><br>%{x|%d/%m/%Y}<br>%{y:,.0f} capturas<extra></extra>",
                 hoverlabel=dict(
                     bgcolor="#10140f",
                     bordercolor=trace_color,
