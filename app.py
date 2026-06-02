@@ -452,6 +452,25 @@ def render_reset_password_page():
                         background: #07100f;
                         outline: none;
                     }}
+                    .reset-password-row {{
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }}
+                    .reset-password-row .reset-input {{
+                        flex: 1 1 auto;
+                    }}
+                    .reset-eye {{
+                        width: 46px;
+                        height: 42px;
+                        border: 1px solid rgba(246, 241, 213, 0.18);
+                        border-radius: 7px;
+                        color: #f6f1d5;
+                        background: #07100f;
+                        cursor: pointer;
+                        font-size: 18px;
+                        line-height: 1;
+                    }}
                     .reset-button {{
                         margin-top: 16px;
                         padding: 10px 14px;
@@ -482,21 +501,75 @@ def render_reset_password_page():
                 </style>
                 <div class="reset-card">
                     <label class="reset-label" for="new-password">Nova senha</label>
-                    <input class="reset-input" id="new-password" type="password" autocomplete="new-password" />
+                    <div class="reset-password-row">
+                        <input class="reset-input" id="new-password" type="password" autocomplete="new-password" />
+                        <button class="reset-eye" id="toggle-new-password" type="button" aria-label="Mostrar ou ocultar senha">&#128065;</button>
+                    </div>
                     <label class="reset-label" for="confirm-password">Confirmar nova senha</label>
-                    <input class="reset-input" id="confirm-password" type="password" autocomplete="new-password" />
+                    <div class="reset-password-row">
+                        <input class="reset-input" id="confirm-password" type="password" autocomplete="new-password" />
+                        <button class="reset-eye" id="toggle-confirm-password" type="button" aria-label="Mostrar ou ocultar senha">&#128065;</button>
+                    </div>
                     <button class="reset-button" id="save-password" type="button">Salvar nova senha</button>
                     <div id="reset-message" class="reset-message" style="display:none;"></div>
                 </div>
                 <script>
                     const supabaseUrl = {SUPABASE_URL!r};
                     const anonKey = {SUPABASE_ANON_KEY!r};
-                    const parentLocation = (window.parent || window).location;
-                    const hash = parentLocation.hash ? parentLocation.hash.substring(1) : "";
-                    const hashParams = new URLSearchParams(hash);
-                    const accessToken = hashParams.get("access_token");
+                    const targetWindow = window.top || window.parent || window;
+                    let targetLocation = window.location;
+                    try {{
+                        targetLocation = targetWindow.location || window.location;
+                    }} catch (error) {{
+                        targetLocation = window.location;
+                    }}
                     const message = document.getElementById("reset-message");
                     const button = document.getElementById("save-password");
+
+                    function paramsFromLocation(locationLike) {{
+                        const values = [];
+                        try {{
+                            if (locationLike.hash) {{
+                                values.push(new URLSearchParams(locationLike.hash.substring(1)));
+                            }}
+                            if (locationLike.search) {{
+                                values.push(new URLSearchParams(locationLike.search));
+                            }}
+                            if (locationLike.href) {{
+                                const hrefUrl = new URL(locationLike.href);
+                                if (hrefUrl.hash) {{
+                                    values.push(new URLSearchParams(hrefUrl.hash.substring(1)));
+                                }}
+                                if (hrefUrl.search) {{
+                                    values.push(new URLSearchParams(hrefUrl.search));
+                                }}
+                            }}
+                        }} catch (error) {{}}
+                        return values;
+                    }}
+
+                    function findParam(name) {{
+                        const locations = [];
+                        for (const candidate of [window.location, targetLocation]) {{
+                            if (candidate) locations.push(candidate);
+                        }}
+                        try {{
+                            if (window.parent && window.parent.location) locations.push(window.parent.location);
+                        }} catch (error) {{}}
+                        try {{
+                            if (window.top && window.top.location) locations.push(window.top.location);
+                        }} catch (error) {{}}
+
+                        for (const locationLike of locations) {{
+                            for (const params of paramsFromLocation(locationLike)) {{
+                                const value = params.get(name);
+                                if (value) return value;
+                            }}
+                        }}
+                        return "";
+                    }}
+
+                    const accessToken = findParam("access_token");
 
                     function showMessage(text, type) {{
                         message.textContent = text;
@@ -508,6 +581,19 @@ def render_reset_password_page():
                         showMessage("Link de recuperacao invalido ou expirado. Solicite um novo email de recuperacao.", "error");
                         button.disabled = true;
                     }}
+
+                    function setupPasswordToggle(buttonId, inputId) {{
+                        const toggle = document.getElementById(buttonId);
+                        const input = document.getElementById(inputId);
+                        toggle.addEventListener("click", () => {{
+                            const visible = input.type === "text";
+                            input.type = visible ? "password" : "text";
+                            toggle.innerHTML = visible ? "&#128065;" : "&#128064;";
+                            input.focus();
+                        }});
+                    }}
+                    setupPasswordToggle("toggle-new-password", "new-password");
+                    setupPasswordToggle("toggle-confirm-password", "confirm-password");
 
                     button.addEventListener("click", async () => {{
                         const password = document.getElementById("new-password").value;
