@@ -129,6 +129,9 @@ Execute no SQL Editor, nesta ordem:
 
 -- importacao mensal de ranking dentro da Curadoria
 -- cole database/migrations/005_monthly_ranking_imports.sql
+
+-- importacoes de curadoria nao consomem limite mensal de inputs
+-- cole database/migrations/006_imports_bypass_submission_limit.sql
 ```
 
 Depois importe o Excel legado, se necessario:

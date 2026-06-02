@@ -714,7 +714,7 @@ def _insert_snapshot(
                 int(line.capturas_xlsx or 0),
                 MONTHLY_IMPORT_SOURCE,
                 f"Importacao XLSX Curadoria #{import_id}",
-                admin_user_id,
+                None,
                 admin_user_id,
                 json.dumps({
                     "nickname_xlsx": line.nickname_xlsx,
