@@ -92,6 +92,37 @@ class MonthlyImportPreviewTest(unittest.TestCase):
         self.assertTrue(any("menores" in error for error in preview[0].erros))
         self.assertTrue(any("snapshot" in error for error in preview[0].erros))
 
+    def test_existing_foreign_player_accepts_saved_foreign_code(self):
+        players = [
+            ExistingPlayer(
+                id=1,
+                nickname="Angelatini",
+                state="ENG",
+                nickname_key=normalize_nickname_key("Angelatini"),
+                alias_keys={normalize_nickname_key("Angelatini")},
+            ),
+            ExistingPlayer(
+                id=144,
+                nickname="GihLucca",
+                state="COI",
+                nickname_key=normalize_nickname_key("GihLucca"),
+                alias_keys={normalize_nickname_key("GihLucca")},
+            ),
+        ]
+        rows = [
+            {"linha_numero": 2, "nickname": "Angelatini", "estado": "ENG", "capturas": 3_153_387},
+            {"linha_numero": 3, "nickname": "GihLucca", "estado": "COI", "capturas": 466_670},
+        ]
+
+        preview = build_import_preview(rows, players, {1: 3_071_000, 144: 465_000}, {})
+
+        self.assertEqual(preview[0].status, "Alerta")
+        self.assertTrue(preview[0].can_import)
+        self.assertEqual(preview[0].estado_xlsx, "ENG")
+        self.assertEqual(preview[1].status, "Alerta")
+        self.assertTrue(preview[1].can_import)
+        self.assertEqual(preview[1].estado_xlsx, "COI")
+
     def test_reader_accepts_required_xlsx_columns(self):
         buffer = io.BytesIO()
         pd.DataFrame({

@@ -122,6 +122,18 @@ def compact_nickname_key(value: object) -> str:
     return re.sub(r"[^a-z0-9]", "", normalize_nickname_key(value))
 
 
+def normalize_location_code(value: object) -> str:
+    return sanitize_text(value, max_length=12).upper()
+
+
+def location_codes_match(left: object, right: object) -> bool:
+    left_code = normalize_location_code(left)
+    right_code = normalize_location_code(right)
+    if not left_code or not right_code:
+        return False
+    return left_code == right_code or left_code[:2] == right_code[:2]
+
+
 def _normalize_column_name(value: object) -> str:
     key = normalize_nickname_key(value).replace(" ", "_")
     return re.sub(r"[^a-z0-9_]", "", key)
@@ -358,7 +370,7 @@ def build_import_preview(
 
     for raw in raw_rows:
         nickname = sanitize_text(raw.get("nickname"), max_length=80)
-        state = sanitize_text(raw.get("estado"), max_length=2).upper()
+        state = normalize_location_code(raw.get("estado"))
         captures_original = "" if raw.get("capturas") is None else str(raw.get("capturas"))
         captures = _parse_captures(raw.get("capturas"))
         nickname_key = normalize_nickname_key(nickname)
@@ -375,10 +387,6 @@ def build_import_preview(
 
         if not nickname:
             line.erros.append("Nickname obrigatorio.")
-        if not state:
-            line.erros.append("Estado obrigatorio.")
-        elif state not in BRAZILIAN_STATES:
-            line.erros.append("Estado deve ser uma UF brasileira valida.")
         if captures is None:
             line.erros.append("Capturas devem ser um numero inteiro.")
         elif captures <= 0:
@@ -395,6 +403,12 @@ def build_import_preview(
             line.jogador_banco = player.nickname
             line.player_id = player.id
             line.ultimo_valor = latest_catches.get(player.id)
+            if not state:
+                line.erros.append("Estado obrigatorio.")
+            elif state not in BRAZILIAN_STATES and not location_codes_match(state, player.state):
+                line.erros.append("Estado deve ser uma UF brasileira valida ou o codigo estrangeiro ja salvo no banco.")
+            elif state not in BRAZILIAN_STATES:
+                line.avisos.append(f"Codigo estrangeiro mantido para jogador existente: {state}.")
             if captures is not None and line.ultimo_valor is not None:
                 line.diferenca = captures - line.ultimo_valor
             if player.id in seen_players:
@@ -403,18 +417,26 @@ def build_import_preview(
                 line.erros.append("Ja existe snapshot para este jogador na data de referencia.")
             if line.ultimo_valor is not None and captures is not None and captures < line.ultimo_valor:
                 line.erros.append("Capturas menores que o ultimo valor registrado.")
-            if player.state and state and str(player.state).upper() != state:
-                line.avisos.append(f"Estado diferente do banco: banco={str(player.state).upper()}, planilha={state}.")
+            if player.state and state and not location_codes_match(player.state, state):
+                line.avisos.append(f"Estado diferente do banco: banco={normalize_location_code(player.state)}, planilha={state}.")
             line.acao = "usar_existente"
         elif possible_duplicate:
             line.jogador_banco = possible_duplicate.nickname
             line.player_id = possible_duplicate.id
             line.ultimo_valor = latest_catches.get(possible_duplicate.id)
+            if not state:
+                line.erros.append("Estado obrigatorio.")
+            elif state not in BRAZILIAN_STATES and not location_codes_match(state, possible_duplicate.state):
+                line.erros.append("Estado deve ser uma UF brasileira valida ou o codigo estrangeiro ja salvo no banco.")
             if captures is not None and line.ultimo_valor is not None:
                 line.diferenca = captures - line.ultimo_valor
             line.avisos.append("Nickname muito parecido com jogador existente; revisar antes de criar novo jogador.")
             line.acao = "possivel_duplicado"
         else:
+            if not state:
+                line.erros.append("Estado obrigatorio.")
+            elif state not in BRAZILIAN_STATES:
+                line.erros.append("Novos jogadores precisam usar uma UF brasileira valida. Codigos estrangeiros so sao aceitos para jogadores ja existentes.")
             line.acao = "criar_jogador"
 
         if line.player_id and line.player_id not in seen_players:
