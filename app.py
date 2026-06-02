@@ -350,7 +350,9 @@ def inject_recovery_hash_bridge() -> None:
     components.html(
         """
         <script>
-        const hash = window.location.hash ? window.location.hash.substring(1) : "";
+        const targetWindow = window.parent || window;
+        const targetLocation = targetWindow.location;
+        const hash = targetLocation.hash ? targetLocation.hash.substring(1) : "";
         if (hash) {
             const hashParams = new URLSearchParams(hash);
             const type = hashParams.get("type");
@@ -359,7 +361,7 @@ def inject_recovery_hash_bridge() -> None:
             const errorCode = hashParams.get("error_code");
             const errorDescription = hashParams.get("error_description");
             if (error || errorCode || errorDescription) {
-                const url = new URL(window.location.href);
+                const url = new URL(targetLocation.href);
                 url.hash = "";
                 url.searchParams.set("page", "login");
                 if (error) {
@@ -371,11 +373,11 @@ def inject_recovery_hash_bridge() -> None:
                 if (errorDescription) {
                     url.searchParams.set("auth_error_description", errorDescription);
                 }
-                window.location.replace(url.toString());
+                targetLocation.replace(url.toString());
                 return;
             }
             if (accessToken && (!type || type === "recovery")) {
-                const url = new URL(window.location.href);
+                const url = new URL(targetLocation.href);
                 url.hash = "";
                 url.searchParams.set("page", "reset-password");
                 for (const key of ["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type"]) {
@@ -384,7 +386,7 @@ def inject_recovery_hash_bridge() -> None:
                         url.searchParams.set(key, value);
                     }
                 }
-                window.location.replace(url.toString());
+                targetLocation.replace(url.toString());
             }
         }
         </script>
