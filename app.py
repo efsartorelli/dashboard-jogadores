@@ -1639,10 +1639,10 @@ def inject_css():
 
     .selected-chip {{
         padding: 0.28rem 0.55rem;
-        border: 1px solid rgba(226,184,79,0.24);
+        border: 1px solid rgba(244,201,93,0.38);
         border-radius: 999px;
-        color: var(--rb-muted);
-        background: rgba(226,184,79,0.07);
+        color: #f6f1d5;
+        background: rgba(244,201,93,0.10);
         font-size: 0.76rem;
         font-weight: 760;
     }}
@@ -4520,14 +4520,20 @@ def render_chart(data, player_options, default_players):
         for index, player in enumerate(selected_players):
             df_player = plot_data[plot_data["nickname"] == player].sort_values("date")
             df_player = downsample_timeseries(df_player)
+            trace_color = colors[index % len(colors)]
             fig.add_trace(go.Scattergl(
                 x=df_player["date"],
                 y=df_player["catches"],
                 mode="lines+markers",
                 name=player,
-                line=dict(width=3, color=colors[index % len(colors)]),
+                line=dict(width=3, color=trace_color),
                 marker=dict(size=6, line=dict(width=1.3, color="rgba(255,255,255,0.38)")),
                 hovertemplate="<b>%{fullData.name}</b><br>%{x|%d/%m/%Y}<br>%{y:,.0f} capturas<extra></extra>",
+                hoverlabel=dict(
+                    bgcolor="#10140f",
+                    bordercolor=trace_color,
+                    font=dict(color="#f6f1d5", size=13),
+                ),
             ))
 
         fig.update_layout(
@@ -4537,7 +4543,17 @@ def render_chart(data, player_options, default_players):
             paper_bgcolor="#070c0a",
             plot_bgcolor="#070c0a",
             hovermode="closest",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=12)),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0,
+                bgcolor="rgba(7,12,10,0.82)",
+                bordercolor="rgba(246,241,213,0.10)",
+                borderwidth=1,
+                font=dict(size=12, color="#f6f1d5"),
+            ),
             font=dict(color="#f6f1d5", family="Inter, Segoe UI, Arial"),
             xaxis=dict(
                 showgrid=True,
