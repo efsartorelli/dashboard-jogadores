@@ -416,6 +416,8 @@ def render_reset_password_page():
 
 
 def render_auth_page():
+    inject_recovery_hash_bridge()
+
     ui_html("""
         <section class="auth-page section-anchor">
             <div class="auth-brand">
