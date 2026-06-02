@@ -197,9 +197,10 @@ class SupabaseAuthClient:
 
     def recover_password(self, email: str, redirect_to: str | None = None) -> None:
         payload: dict[str, Any] = {"email": email.strip().lower()}
+        path = "/auth/v1/recover"
         if redirect_to:
-            payload["redirect_to"] = redirect_to
-        self._request("POST", "/auth/v1/recover", json=payload)
+            path = f"{path}?redirect_to={quote(redirect_to, safe='')}"
+        self._request("POST", path, json=payload)
 
     def update_password(self, access_token: str, password: str) -> None:
         self._request(

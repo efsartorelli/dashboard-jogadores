@@ -15,11 +15,11 @@ class SupabaseAuthClientTest(unittest.TestCase):
         with patch("src.auth.client.requests.request", return_value=response) as request:
             client.recover_password("User@Email.com", redirect_to="https://app.test/?page=reset-password")
 
-        self.assertEqual(request.call_args.args[:2], ("POST", "https://example.supabase.co/auth/v1/recover"))
-        self.assertEqual(request.call_args.kwargs["json"], {
-            "email": "user@email.com",
-            "redirect_to": "https://app.test/?page=reset-password",
-        })
+        self.assertEqual(
+            request.call_args.args[:2],
+            ("POST", "https://example.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2Fapp.test%2F%3Fpage%3Dreset-password"),
+        )
+        self.assertEqual(request.call_args.kwargs["json"], {"email": "user@email.com"})
 
     def test_update_password_uses_authenticated_user_endpoint(self):
         client = SupabaseAuthClient(url="https://example.supabase.co", anon_key="anon")
