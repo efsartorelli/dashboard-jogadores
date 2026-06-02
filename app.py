@@ -27,6 +27,12 @@ from src.services.admin_review import (
     reject_record,
     update_pending_record,
 )
+from src.services.monthly_imports import (
+    analyze_monthly_import,
+    confirm_monthly_import,
+    list_monthly_imports,
+    undo_monthly_import,
+)
 from src.services.payments import create_upgrade_checkout
 from src.services.submissions import submit_player_record
 from src.services.users import (
@@ -36,7 +42,6 @@ from src.services.users import (
     get_user_entitlement,
     update_user_profile,
     user_can_moderate,
-    user_is_admin,
     profile_has_location,
 )
 from src.validation.submissions import BRAZILIAN_STATES
@@ -5536,9 +5541,236 @@ def curation_status_label(status: str) -> str:
     }.get(str(status or "").lower(), str(status or "-"))
 
 
+def _format_optional_int(value):
+    if value in (None, ""):
+        return "-"
+    try:
+        return format_int(value)
+    except Exception:
+        return str(value)
+
+
+def _format_optional_delta(value):
+    if value in (None, ""):
+        return "-"
+    try:
+        return format_signed_compact(value)
+    except Exception:
+        return str(value)
+
+
+def render_monthly_import_section(profile):
+    ui_html("""
+        <section class="section-anchor" id="importacao-mensal-ranking">
+            <div class="section-head">
+                <div class="section-kicker">Curadoria</div>
+                <h2>Importacao Mensal de Ranking</h2>
+                <p class="section-copy">
+                    Analise a planilha antes de gravar, vincule jogadores existentes e crie snapshots mensais sem duplicar cadastros.
+                </p>
+            </div>
+        </section>
+    """)
+
+    last_result = st.session_state.pop("monthly_import_last_result", None)
+    if last_result:
+        if last_result.get("success"):
+            st.success(
+                "Importacao concluida. "
+                f"ID: {last_result.get('importacao_id')} | "
+                f"Snapshots: {last_result.get('snapshots_criados', last_result.get('snapshots_desfeitos', 0))} | "
+                f"Novos jogadores: {last_result.get('novos_jogadores', 0)} | "
+                f"Linhas ignoradas: {last_result.get('linhas_ignoradas', 0)}"
+            )
+        else:
+            st.error("; ".join(last_result.get("errors", ["Nao foi possivel processar a importacao."])))
+
+    import_tab, history_tab = st.tabs(["Analisar XLSX", "Historico de importacoes"])
+
+    with import_tab:
+        with st.container(key="monthly_import_upload_shell"):
+            upload_col, date_col, action_col = st.columns([0.48, 0.24, 0.28], vertical_alignment="bottom")
+            with upload_col:
+                uploaded_file = st.file_uploader(
+                    "Planilha XLSX",
+                    type=["xlsx"],
+                    key="monthly_ranking_xlsx",
+                )
+            with date_col:
+                data_referencia = st.date_input(
+                    "Data de referencia",
+                    value=date.today().replace(day=1),
+                    max_value=date.today(),
+                    key="monthly_import_reference_date",
+                )
+            with action_col:
+                analyze_clicked = st.button(
+                    "Analisar planilha",
+                    type="primary",
+                    width="stretch",
+                    disabled=uploaded_file is None,
+                    key="monthly_import_analyze_button",
+                )
+
+        if analyze_clicked and uploaded_file is not None:
+            try:
+                analysis = analyze_monthly_import(
+                    uploaded_file,
+                    data_referencia,
+                    arquivo_nome=getattr(uploaded_file, "name", "ranking.xlsx"),
+                )
+                st.session_state.monthly_import_analysis = analysis.to_dict()
+                st.session_state.monthly_import_last_result = None
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nao foi possivel analisar a planilha: {exc}")
+
+        analysis_payload = st.session_state.get("monthly_import_analysis")
+        if analysis_payload:
+            lines = analysis_payload.get("linhas", [])
+            errors = analysis_payload.get("errors", [])
+            if errors:
+                st.error("; ".join(errors))
+
+            preview_df = pd.DataFrame([
+                {
+                    "Linha": line.get("linha_numero"),
+                    "Nickname XLSX": line.get("nickname_xlsx"),
+                    "Estado": line.get("estado_xlsx"),
+                    "Capturas XLSX": _format_optional_int(line.get("capturas_xlsx")),
+                    "Jogador no Banco": line.get("jogador_banco") or "Nao encontrado",
+                    "Player ID": line.get("player_id") or "-",
+                    "Ultimo Valor": _format_optional_int(line.get("ultimo_valor")),
+                    "Novo Valor": _format_optional_int(line.get("novo_valor")),
+                    "Diferenca": _format_optional_delta(line.get("diferenca")),
+                    "Status": line.get("status"),
+                    "Mensagem": line.get("mensagem"),
+                }
+                for line in lines
+            ])
+
+            total = len(lines)
+            validas = sum(1 for line in lines if line.get("can_import"))
+            erros = sum(1 for line in lines if line.get("status_validacao") == "erro")
+            alertas = sum(1 for line in lines if line.get("status_validacao") == "alerta")
+            novos = sum(1 for line in lines if line.get("can_import") and line.get("acao") == "criar_jogador")
+            existentes = sum(1 for line in lines if line.get("can_import") and line.get("acao") == "usar_existente")
+
+            ui_html(f"""
+                <div class="profile-metric-grid">
+                    <article class="profile-metric">
+                        <div class="profile-metric-label">Linhas</div>
+                        <div class="profile-metric-value">{format_int(total)}</div>
+                    </article>
+                    <article class="profile-metric">
+                        <div class="profile-metric-label">Validas</div>
+                        <div class="profile-metric-value">{format_int(validas)}</div>
+                    </article>
+                    <article class="profile-metric">
+                        <div class="profile-metric-label">Existentes</div>
+                        <div class="profile-metric-value">{format_int(existentes)}</div>
+                    </article>
+                    <article class="profile-metric">
+                        <div class="profile-metric-label">Novos</div>
+                        <div class="profile-metric-value">{format_int(novos)}</div>
+                    </article>
+                    <article class="profile-metric">
+                        <div class="profile-metric-label">Alertas</div>
+                        <div class="profile-metric-value">{format_int(alertas)}</div>
+                    </article>
+                    <article class="profile-metric">
+                        <div class="profile-metric-label">Erros</div>
+                        <div class="profile-metric-value">{format_int(erros)}</div>
+                    </article>
+                </div>
+            """)
+
+            st.dataframe(
+                preview_df,
+                hide_index=True,
+                use_container_width=True,
+                height=min(560, 94 + max(1, len(preview_df)) * 38),
+            )
+
+            confirm_col, clear_col = st.columns([0.28, 0.72], vertical_alignment="center")
+            with confirm_col:
+                confirm_clicked = st.button(
+                    "Confirmar importacao",
+                    type="primary",
+                    width="stretch",
+                    disabled=bool(errors) or erros > 0 or validas == 0,
+                    key="monthly_import_confirm_button",
+                )
+            with clear_col:
+                if st.button("Limpar analise", key="monthly_import_clear_button"):
+                    st.session_state.pop("monthly_import_analysis", None)
+                    st.rerun()
+
+            if confirm_clicked:
+                result = confirm_monthly_import(analysis_payload, str(profile.get("id") or ""))
+                if result.get("success"):
+                    clear_dashboard_caches()
+                    clear_curation_caches()
+                    st.session_state.pop("monthly_import_analysis", None)
+                st.session_state.monthly_import_last_result = result
+                st.rerun()
+        else:
+            ui_html('<div class="empty-state compact">Envie uma planilha XLSX para ver a previa antes de confirmar.</div>')
+
+    with history_tab:
+        result = list_monthly_imports(str(profile.get("id") or ""), limit=30)
+        if not result.get("success"):
+            st.warning("; ".join(result.get("errors", ["Nao foi possivel carregar o historico de importacoes."])))
+            return
+        imports = result.get("imports", [])
+        if not imports:
+            ui_html('<div class="empty-state compact">Nenhuma importacao mensal registrada ainda.</div>')
+            return
+
+        imports_df = pd.DataFrame(imports)
+        history_view = pd.DataFrame({
+            "ID": imports_df["id"],
+            "Arquivo": imports_df["arquivo_nome"],
+            "Data referencia": imports_df["data_referencia"].map(format_date_value),
+            "Status": imports_df["status"],
+            "Linhas": imports_df["total_linhas"].map(format_int),
+            "Snapshots": imports_df["snapshots_criados"].map(format_int),
+            "Existentes": imports_df["jogadores_existentes"].map(format_int),
+            "Novos": imports_df["jogadores_criados"].map(format_int),
+            "Ignoradas": imports_df["linhas_ignoradas"].map(format_int),
+            "Confirmada em": imports_df["confirmed_at"].map(format_datetime_value),
+            "Desfeita em": imports_df["undone_at"].map(format_datetime_value),
+        })
+        st.dataframe(
+            history_view,
+            hide_index=True,
+            use_container_width=True,
+            height=min(520, 94 + len(history_view) * 38),
+        )
+
+        labels = [
+            f"#{row['id']} · {row['data_referencia']} · {row['arquivo_nome']} · {row['status']}"
+            for row in imports
+        ]
+        selected_label = st.selectbox("Importacao para desfazer", labels, key="monthly_import_undo_select")
+        selected_import = imports[labels.index(selected_label)]
+        undo_disabled = selected_import.get("status") != "confirmado"
+        if st.button(
+            "Desfazer importacao selecionada",
+            disabled=undo_disabled,
+            key="monthly_import_undo_button",
+        ):
+            result = undo_monthly_import(int(selected_import["id"]), str(profile.get("id") or ""))
+            if result.get("success"):
+                clear_dashboard_caches()
+                clear_curation_caches()
+            st.session_state.monthly_import_last_result = result
+            st.rerun()
+
+
 def render_curation_page(profile):
-    if not user_is_admin(profile):
-        st.error("Acesso restrito a administradores.")
+    if not user_can_moderate(profile):
+        st.error("Acesso restrito a administradores e moderadores.")
         return
 
     ui_html("""
@@ -5555,6 +5787,8 @@ def render_curation_page(profile):
         st.session_state.pop("curation_last_result", None),
         "Curadoria atualizada.",
     )
+
+    render_monthly_import_section(profile)
 
     status_options = {
         "pending": "pendente",
@@ -6063,7 +6297,7 @@ premium_enabled_for_user = ENABLE_PREMIUM or bool(profile.get("is_premium"))
 page_options = ["Dashboard", "Perfil"]
 if premium_enabled_for_user:
     page_options.append("Premium")
-if user_is_admin(profile):
+if user_can_moderate(profile):
     page_options.append("Curadoria")
 if selected_public_player:
     page_options.append("Perfil do jogador")

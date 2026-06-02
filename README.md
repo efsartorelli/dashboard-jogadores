@@ -126,6 +126,9 @@ Execute no SQL Editor, nesta ordem:
 
 -- nickname e localidade do perfil
 -- cole database/migrations/004_user_profile_landing_location.sql
+
+-- importacao mensal de ranking dentro da Curadoria
+-- cole database/migrations/005_monthly_ranking_imports.sql
 ```
 
 Depois importe o Excel legado, se necessario:
