@@ -349,51 +349,85 @@ def get_auth_error_from_query() -> str:
 
 
 def inject_recovery_hash_bridge() -> None:
+    reset_url = build_auth_redirect_url(RESET_PASSWORD_PAGE)
+    login_url = build_auth_redirect_url("login")
     components.html(
-        """
+        f"""
         <script>
-        const targetWindow = window.parent || window;
-        const targetLocation = targetWindow.location;
-        const hash = targetLocation.hash ? targetLocation.hash.substring(1) : "";
-        if (hash) {
-            const hashParams = new URLSearchParams(hash);
-            const type = hashParams.get("type");
-            const accessToken = hashParams.get("access_token");
-            const error = hashParams.get("error");
-            const errorCode = hashParams.get("error_code");
-            const errorDescription = hashParams.get("error_description");
-            if (error || errorCode || errorDescription) {
-                const url = new URL(targetLocation.href);
-                url.hash = "";
-                url.searchParams.set("page", "login");
-                if (error) {
-                    url.searchParams.set("auth_error", error);
-                }
-                if (errorCode) {
-                    url.searchParams.set("auth_error_code", errorCode);
-                }
-                if (errorDescription) {
-                    url.searchParams.set("auth_error_description", errorDescription);
-                }
-                targetLocation.replace(url.toString());
+        function getLocationValue(locationLike, key) {{
+            try {{
+                if (!locationLike) return "";
+                const values = [];
+                if (locationLike.hash) values.push(new URLSearchParams(locationLike.hash.substring(1)));
+                if (locationLike.search) values.push(new URLSearchParams(locationLike.search));
+                if (locationLike.href) {{
+                    const hrefUrl = new URL(locationLike.href);
+                    if (hrefUrl.hash) values.push(new URLSearchParams(hrefUrl.hash.substring(1)));
+                    if (hrefUrl.search) values.push(new URLSearchParams(hrefUrl.search));
+                }}
+                for (const params of values) {{
+                    const value = params.get(key);
+                    if (value) return value;
+                }}
+            }} catch (error) {{}}
+            return "";
+        }}
+
+        function findParam(key) {{
+            const locations = [];
+            try {{ locations.push(window.location); }} catch (error) {{}}
+            try {{ locations.push(window.parent.location); }} catch (error) {{}}
+            try {{ locations.push(window.parent.document.location); }} catch (error) {{}}
+            try {{ locations.push(window.top.location); }} catch (error) {{}}
+            try {{ locations.push(window.top.document.location); }} catch (error) {{}}
+            for (const locationLike of locations) {{
+                const value = getLocationValue(locationLike, key);
+                if (value) return value;
+            }}
+            return "";
+        }}
+
+        function replaceParent(url) {{
+            try {{
+                window.top.location.replace(url);
                 return;
-            }
-            if (accessToken && (!type || type === "recovery")) {
-                const url = new URL(targetLocation.href);
-                url.hash = "";
-                url.searchParams.set("page", "reset-password");
-                for (const key of ["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type"]) {
-                    const value = hashParams.get(key);
-                    if (value) {
-                        url.searchParams.set(key, value);
-                    }
-                }
-                targetLocation.replace(url.toString());
-            }
-        }
+            }} catch (error) {{}}
+            try {{
+                window.parent.location.replace(url);
+                return;
+            }} catch (error) {{}}
+            window.location.replace(url);
+        }}
+
+        const type = findParam("type");
+        const accessToken = findParam("access_token");
+        const refreshToken = findParam("refresh_token");
+        const expiresAt = findParam("expires_at");
+        const expiresIn = findParam("expires_in");
+        const tokenType = findParam("token_type");
+        const error = findParam("error");
+        const errorCode = findParam("error_code");
+        const errorDescription = findParam("error_description");
+
+        if (error || errorCode || errorDescription) {{
+            const url = new URL({login_url!r});
+            if (error) url.searchParams.set("auth_error", error);
+            if (errorCode) url.searchParams.set("auth_error_code", errorCode);
+            if (errorDescription) url.searchParams.set("auth_error_description", errorDescription);
+            replaceParent(url.toString());
+        }} else if (accessToken && (!type || type === "recovery")) {{
+            const url = new URL({reset_url!r});
+            url.searchParams.set("access_token", accessToken);
+            if (refreshToken) url.searchParams.set("refresh_token", refreshToken);
+            if (expiresAt) url.searchParams.set("expires_at", expiresAt);
+            if (expiresIn) url.searchParams.set("expires_in", expiresIn);
+            if (tokenType) url.searchParams.set("token_type", tokenType);
+            if (type) url.searchParams.set("type", type);
+            replaceParent(url.toString());
+        }}
         </script>
         """,
-        height=0,
+        height=1,
     )
 
 
