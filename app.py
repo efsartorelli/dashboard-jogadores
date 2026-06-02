@@ -314,6 +314,8 @@ def build_auth_redirect_url(page: str | None = None) -> str:
 
 def friendly_auth_error(exc: Exception | str) -> str:
     message = str(exc or "").casefold()
+    if any(term in message for term in ("otp_expired", "expired", "invalid or has expired")):
+        return "O link de recuperacao expirou ou ja foi usado. Solicite um novo email de recuperacao."
     if any(term in message for term in ("invalid login", "invalid credentials", "email not found", "invalid_grant")):
         return "Email ou senha incorretos. Verifique os dados e tente novamente."
     if any(term in message for term in ("email not confirmed", "email_confirmed", "confirm")):
@@ -334,6 +336,16 @@ def get_reset_access_token_from_query() -> str:
     return str(token or "").strip()
 
 
+def get_auth_error_from_query() -> str:
+    error_code = st.query_params.get("auth_error_code", "")
+    error_description = st.query_params.get("auth_error_description", "")
+    if isinstance(error_code, list):
+        error_code = error_code[0] if error_code else ""
+    if isinstance(error_description, list):
+        error_description = error_description[0] if error_description else ""
+    return " ".join(part for part in [str(error_code or ""), str(error_description or "")] if part).strip()
+
+
 def inject_recovery_hash_bridge() -> None:
     components.html(
         """
@@ -343,6 +355,25 @@ def inject_recovery_hash_bridge() -> None:
             const hashParams = new URLSearchParams(hash);
             const type = hashParams.get("type");
             const accessToken = hashParams.get("access_token");
+            const error = hashParams.get("error");
+            const errorCode = hashParams.get("error_code");
+            const errorDescription = hashParams.get("error_description");
+            if (error || errorCode || errorDescription) {
+                const url = new URL(window.location.href);
+                url.hash = "";
+                url.searchParams.set("page", "login");
+                if (error) {
+                    url.searchParams.set("auth_error", error);
+                }
+                if (errorCode) {
+                    url.searchParams.set("auth_error_code", errorCode);
+                }
+                if (errorDescription) {
+                    url.searchParams.set("auth_error_description", errorDescription);
+                }
+                window.location.replace(url.toString());
+                return;
+            }
             if (accessToken && (!type || type === "recovery")) {
                 const url = new URL(window.location.href);
                 url.hash = "";
@@ -381,6 +412,11 @@ def render_reset_password_page():
     auth_config = validate_required_settings(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
     if not client.is_configured or not auth_config.ok:
         st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY nos secrets do ambiente.")
+        return
+
+    auth_error = get_auth_error_from_query()
+    if auth_error:
+        st.error(friendly_auth_error(auth_error))
         return
 
     access_token = get_reset_access_token_from_query()
@@ -445,6 +481,9 @@ def render_auth_page():
     if feedback:
         level, message = feedback
         getattr(st, level)(message)
+    auth_error = get_auth_error_from_query()
+    if auth_error:
+        st.error(friendly_auth_error(auth_error))
 
     with st.container(key="auth_card_shell"):
         login_tab, signup_tab, recover_tab = st.tabs(["Entrar", "Criar conta", "Recuperar senha"])
