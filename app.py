@@ -4547,6 +4547,14 @@ def render_chart(data, player_options, default_players):
                 ),
             ))
 
+        fig.update_traces(
+            hoverlabel=dict(
+                bgcolor="#10140f",
+                bordercolor="#f4c95d",
+                font_color="#f6f1d5",
+                font_size=13,
+            )
+        )
         fig.update_layout(
             template="plotly_dark",
             height=460,
