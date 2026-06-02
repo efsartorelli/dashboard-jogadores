@@ -310,6 +310,8 @@ def build_auth_redirect_url(page: str | None = None) -> str:
     base_url = SUPABASE_AUTH_REDIRECT_URL.rstrip("/")
     if not page:
         return base_url
+    if "?" not in base_url and not base_url.endswith("/"):
+        base_url = f"{base_url}/"
     separator = "&" if "?" in base_url else "?"
     return f"{base_url}{separator}{urlencode({'page': page})}"
 
@@ -336,6 +338,20 @@ def get_reset_access_token_from_query() -> str:
     if isinstance(token, list):
         token = token[0] if token else ""
     return str(token or "").strip()
+
+
+def get_reset_refresh_token_from_query() -> str:
+    token = st.query_params.get("refresh_token", "")
+    if isinstance(token, list):
+        token = token[0] if token else ""
+    return str(token or "").strip()
+
+
+def get_reset_type_from_query() -> str:
+    value = st.query_params.get("type", "")
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    return str(value or "").strip().lower()
 
 
 def get_auth_error_from_query() -> str:
@@ -431,6 +447,245 @@ def inject_recovery_hash_bridge() -> None:
     )
 
 
+def render_reset_password_hash_component():
+    reset_url = build_auth_redirect_url(RESET_PASSWORD_PAGE)
+    login_url = build_auth_redirect_url("login")
+    components.html(
+        f"""
+        <div style="font-family: Inter, Segoe UI, Arial, sans-serif; color:#f6f1d5;">
+            <style>
+                .reset-card {{
+                    max-width: 520px;
+                    margin: 0 auto;
+                    padding: 18px;
+                    border: 1px solid rgba(80, 151, 126, 0.28);
+                    border-radius: 8px;
+                    background: rgba(7, 12, 10, 0.78);
+                }}
+                .reset-label {{
+                    display: block;
+                    margin: 12px 0 6px;
+                    color: #f6f1d5;
+                    font-size: 13px;
+                    font-weight: 700;
+                }}
+                .reset-row {{
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }}
+                .reset-input {{
+                    width: 100%;
+                    min-width: 0;
+                    box-sizing: border-box;
+                    padding: 11px 12px;
+                    border: 1px solid rgba(246, 241, 213, 0.18);
+                    border-radius: 7px;
+                    color: #f6f1d5;
+                    background: #07100f;
+                    outline: none;
+                }}
+                .reset-eye {{
+                    width: 44px;
+                    height: 42px;
+                    flex: 0 0 44px;
+                    border: 1px solid rgba(246, 241, 213, 0.18);
+                    border-radius: 7px;
+                    color: #f6f1d5;
+                    background: #07100f;
+                    cursor: pointer;
+                    font-size: 17px;
+                }}
+                .reset-button {{
+                    margin-top: 16px;
+                    padding: 10px 14px;
+                    border: 1px solid rgba(244, 201, 93, 0.55);
+                    border-radius: 7px;
+                    color: #171207;
+                    background: #f4c95d;
+                    font-weight: 800;
+                    cursor: pointer;
+                }}
+                .reset-login {{
+                    margin-left: 8px;
+                    padding: 10px 14px;
+                    border: 1px solid rgba(246, 241, 213, 0.18);
+                    border-radius: 7px;
+                    color: #f6f1d5;
+                    background: #07100f;
+                    font-weight: 800;
+                    cursor: pointer;
+                }}
+                .reset-message {{
+                    margin-top: 12px;
+                    padding: 10px 12px;
+                    border-radius: 7px;
+                    font-size: 13px;
+                    line-height: 1.35;
+                }}
+                .reset-error {{
+                    color: #ffd7d7;
+                    background: rgba(144, 36, 36, 0.28);
+                    border: 1px solid rgba(255, 130, 130, 0.25);
+                }}
+                .reset-success {{
+                    color: #d9ffe6;
+                    background: rgba(46, 125, 75, 0.26);
+                    border: 1px solid rgba(108, 214, 139, 0.25);
+                }}
+            </style>
+            <div class="reset-card">
+                <label class="reset-label" for="new-password">Nova senha</label>
+                <div class="reset-row">
+                    <input class="reset-input" id="new-password" type="password" autocomplete="new-password" />
+                    <button class="reset-eye" id="toggle-new-password" type="button" aria-label="Mostrar ou ocultar senha">&#128065;</button>
+                </div>
+                <label class="reset-label" for="confirm-password">Confirmar nova senha</label>
+                <div class="reset-row">
+                    <input class="reset-input" id="confirm-password" type="password" autocomplete="new-password" />
+                    <button class="reset-eye" id="toggle-confirm-password" type="button" aria-label="Mostrar ou ocultar senha">&#128065;</button>
+                </div>
+                <button class="reset-button" id="save-password" type="button">Salvar nova senha</button>
+                <button class="reset-login" id="go-login" type="button" style="display:none;">Voltar ao login</button>
+                <div id="reset-message" class="reset-message" style="display:none;"></div>
+            </div>
+            <script>
+                const supabaseUrl = {SUPABASE_URL!r};
+                const anonKey = {SUPABASE_ANON_KEY!r};
+                const resetUrl = {reset_url!r};
+                const loginUrl = {login_url!r};
+
+                function readValue(locationLike, key) {{
+                    try {{
+                        const sets = [];
+                        if (locationLike.hash) sets.push(new URLSearchParams(locationLike.hash.substring(1)));
+                        if (locationLike.search) sets.push(new URLSearchParams(locationLike.search));
+                        if (locationLike.href) {{
+                            const url = new URL(locationLike.href);
+                            if (url.hash) sets.push(new URLSearchParams(url.hash.substring(1)));
+                            if (url.search) sets.push(new URLSearchParams(url.search));
+                        }}
+                        for (const params of sets) {{
+                            const value = params.get(key);
+                            if (value) return value;
+                        }}
+                    }} catch (error) {{}}
+                    return "";
+                }}
+
+                function findValue(key) {{
+                    const candidates = [];
+                    try {{ candidates.push(window.location); }} catch (error) {{}}
+                    try {{ candidates.push(window.parent.location); }} catch (error) {{}}
+                    try {{ candidates.push(window.top.location); }} catch (error) {{}}
+                    for (const candidate of candidates) {{
+                        const value = readValue(candidate, key);
+                        if (value) return value;
+                    }}
+                    return "";
+                }}
+
+                const accessToken = findValue("access_token");
+                const refreshToken = findValue("refresh_token");
+                const type = findValue("type");
+                const expiresAt = findValue("expires_at");
+                const expiresIn = findValue("expires_in");
+                const tokenType = findValue("token_type");
+                const message = document.getElementById("reset-message");
+                const saveButton = document.getElementById("save-password");
+                const loginButton = document.getElementById("go-login");
+
+                function showMessage(text, typeName) {{
+                    message.textContent = text;
+                    message.className = "reset-message " + (typeName === "success" ? "reset-success" : "reset-error");
+                    message.style.display = "block";
+                }}
+
+                function replaceTop(url) {{
+                    try {{ window.top.location.replace(url); return; }} catch (error) {{}}
+                    try {{ window.parent.location.replace(url); return; }} catch (error) {{}}
+                    window.location.replace(url);
+                }}
+
+                if (accessToken && refreshToken && type === "recovery") {{
+                    try {{
+                        const url = new URL(resetUrl);
+                        url.searchParams.set("access_token", accessToken);
+                        url.searchParams.set("refresh_token", refreshToken);
+                        url.searchParams.set("type", type);
+                        if (expiresAt) url.searchParams.set("expires_at", expiresAt);
+                        if (expiresIn) url.searchParams.set("expires_in", expiresIn);
+                        if (tokenType) url.searchParams.set("token_type", tokenType);
+                        if (!window.location.search.includes("access_token")) {{
+                            replaceTop(url.toString());
+                        }}
+                    }} catch (error) {{}}
+                }}
+
+                if (!accessToken || !refreshToken || type !== "recovery") {{
+                    showMessage("Nao foi possivel validar o link de recuperacao. Abra novamente o link recebido por email ou solicite uma nova recuperacao de senha.", "error");
+                    saveButton.disabled = true;
+                }}
+
+                function setupToggle(buttonId, inputId) {{
+                    const toggle = document.getElementById(buttonId);
+                    const input = document.getElementById(inputId);
+                    toggle.addEventListener("click", () => {{
+                        const visible = input.type === "text";
+                        input.type = visible ? "password" : "text";
+                        toggle.innerHTML = visible ? "&#128065;" : "&#128064;";
+                        input.focus();
+                    }});
+                }}
+                setupToggle("toggle-new-password", "new-password");
+                setupToggle("toggle-confirm-password", "confirm-password");
+
+                loginButton.addEventListener("click", () => replaceTop(loginUrl));
+
+                saveButton.addEventListener("click", async () => {{
+                    const password = document.getElementById("new-password").value;
+                    const confirm = document.getElementById("confirm-password").value;
+                    if (!password || password.length < 6) {{
+                        showMessage("Use uma senha com pelo menos 6 caracteres.", "error");
+                        return;
+                    }}
+                    if (password !== confirm) {{
+                        showMessage("As senhas nao conferem.", "error");
+                        return;
+                    }}
+                    saveButton.disabled = true;
+                    saveButton.textContent = "Salvando...";
+                    try {{
+                        const response = await fetch(`${{supabaseUrl}}/auth/v1/user`, {{
+                            method: "PUT",
+                            headers: {{
+                                "Content-Type": "application/json",
+                                "apikey": anonKey,
+                                "Authorization": `Bearer ${{accessToken}}`
+                            }},
+                            body: JSON.stringify({{ password }})
+                        }});
+                        if (!response.ok) throw new Error("update_failed");
+                        showMessage("Senha alterada com sucesso. Faca login novamente.", "success");
+                        saveButton.style.display = "none";
+                        loginButton.style.display = "inline-block";
+                        try {{
+                            const clean = new URL(loginUrl);
+                            window.top.history.replaceState(null, "", clean.toString());
+                        }} catch (error) {{}}
+                    }} catch (error) {{
+                        saveButton.disabled = false;
+                        saveButton.textContent = "Salvar nova senha";
+                        showMessage("Nao foi possivel alterar a senha. Abra novamente o link recebido por email ou solicite uma nova recuperacao de senha.", "error");
+                    }}
+                }});
+            </script>
+        </div>
+        """,
+        height=390,
+    )
+
+
 def render_reset_password_page():
     ui_html("""
         <section class="auth-page section-anchor">
@@ -456,9 +711,14 @@ def render_reset_password_page():
         return
 
     access_token = get_reset_access_token_from_query()
+    refresh_token = get_reset_refresh_token_from_query()
+    type_param = get_reset_type_from_query()
     if not access_token:
         inject_recovery_hash_bridge()
-        st.info("Preparando tela de redefinicao de senha. Se esta mensagem continuar, abra novamente o link recebido por email.")
+        render_reset_password_hash_component()
+        return
+    if type_param and type_param != "recovery":
+        st.error("Nao foi possivel validar o link de recuperacao. Abra novamente o link recebido por email ou solicite uma nova recuperacao de senha.")
         return
 
     with st.container(key="auth_reset_shell"):
@@ -468,8 +728,8 @@ def render_reset_password_page():
             submitted = st.form_submit_button("Salvar nova senha", type="primary")
 
         if submitted:
-            if len(password) < 8:
-                st.error("Use uma senha com pelo menos 8 caracteres.")
+            if len(password) < 6:
+                st.error("Use uma senha com pelo menos 6 caracteres.")
                 return
             if password != confirm:
                 st.error("As senhas nao conferem.")
