@@ -4514,7 +4514,7 @@ def render_chart(data, player_options, default_players):
             return
 
         plot_data = filter_by_period(data[data["nickname"].isin(selected_players)], period)
-        colors = ["#e2b84f", "#7fa35a", "#6f7fd9", "#b06b4f", "#8bb6c9", "#d9a48f", "#b6c56d", "#d0c7a8", "#7f9471", "#a97862"]
+        colors = ["#f4c95d", "#8ccf5f", "#6bb8ff", "#ff8a65", "#b892ff", "#4fd1c5", "#f59e0b", "#ef6f91", "#c7e36d", "#9fb7ff"]
 
         fig = go.Figure()
         for index, player in enumerate(selected_players):
@@ -4535,13 +4535,17 @@ def render_chart(data, player_options, default_players):
             height=460,
             margin=dict(l=10, r=10, t=34, b=8),
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(16,17,12,0.28)",
+            plot_bgcolor="rgba(7,12,10,0.72)",
             hovermode="x unified",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=12)),
-            font=dict(color="#f0efff", family="Inter, Segoe UI, Arial"),
-            xaxis=dict(showgrid=True, gridcolor="rgba(240,218,159,0.08)", zeroline=False),
-            yaxis=dict(showgrid=True, gridcolor="rgba(240,218,159,0.08)", zeroline=False, tickformat=","),
-            hoverlabel=dict(bgcolor="#241b13", bordercolor="#e2b84f", font_size=13),
+            font=dict(color="#f6f1d5", family="Inter, Segoe UI, Arial"),
+            xaxis=dict(showgrid=True, gridcolor="rgba(246,241,213,0.10)", zeroline=False, spikecolor="#f4c95d"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(246,241,213,0.10)", zeroline=False, tickformat=","),
+            hoverlabel=dict(
+                bgcolor="rgba(12,16,14,0.98)",
+                bordercolor="#6e8f5d",
+                font=dict(color="#f6f1d5", size=13),
+            ),
         )
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
