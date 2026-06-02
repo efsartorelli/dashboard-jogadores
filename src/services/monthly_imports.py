@@ -214,23 +214,46 @@ def _is_moderator_or_admin(conn, user_id: str | None) -> bool:
 
 
 def _fetch_existing_players(conn) -> tuple[list[ExistingPlayer], dict[int, int], dict[int, int]]:
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, nickname_atual, state, COALESCE(nickname_key, '') AS nickname_key
+                FROM jogadores
+                WHERE ativo = TRUE
+                """
+            )
+            player_rows = list(cur.fetchall())
+            cur.execute(
+                """
+                SELECT jogador_id, nickname, COALESCE(nickname_key, '') AS nickname_key
+                FROM jogador_nicknames
+                WHERE ativo = TRUE
+                """
+            )
+            alias_rows = list(cur.fetchall())
+    except Exception as exc:
+        if "nickname_key" not in str(exc):
+            raise
+        conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, nickname_atual, state
+                FROM jogadores
+                WHERE ativo = TRUE
+                """
+            )
+            player_rows = [{**row, "nickname_key": ""} for row in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT jogador_id, nickname
+                FROM jogador_nicknames
+                """
+            )
+            alias_rows = [{**row, "nickname_key": ""} for row in cur.fetchall()]
+
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, nickname_atual, state, COALESCE(nickname_key, '') AS nickname_key
-            FROM jogadores
-            WHERE ativo = TRUE
-            """
-        )
-        player_rows = list(cur.fetchall())
-        cur.execute(
-            """
-            SELECT jogador_id, nickname, COALESCE(nickname_key, '') AS nickname_key
-            FROM jogador_nicknames
-            WHERE ativo = TRUE
-            """
-        )
-        alias_rows = list(cur.fetchall())
         cur.execute(
             """
             SELECT DISTINCT ON (jogador_id)
