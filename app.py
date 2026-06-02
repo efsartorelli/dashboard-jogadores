@@ -34,6 +34,7 @@ from src.services.monthly_imports import (
     list_monthly_imports,
     undo_monthly_import,
 )
+from src.services.ranking_reprocess import reprocess_current_ranking
 from src.services.payments import create_upgrade_checkout
 from src.services.submissions import submit_player_record
 from src.services.users import (
@@ -6058,6 +6059,55 @@ def _format_optional_delta(value):
         return str(value)
 
 
+def render_ranking_reprocess_section(profile):
+    ui_html("""
+        <section class="section-anchor" id="reprocessar-ranking-atual">
+            <div class="section-head">
+                <div class="section-kicker">Curadoria</div>
+                <h2>Reprocessar Ranking Atual</h2>
+                <p class="section-copy">
+                    Regera o ranking materializado usando o ultimo registro validado de cada jogador ativo, sempre vinculado por player ID.
+                </p>
+            </div>
+        </section>
+    """)
+
+    result = st.session_state.pop("ranking_reprocess_last_result", None)
+    if result:
+        if result.get("success"):
+            st.success(
+                "Ranking reprocessado. "
+                f"Snapshot ID: {result.get('snapshot_id')} | "
+                f"Itens: {format_int(result.get('itens_criados') or 0)} | "
+                f"Jogadores: {format_int(result.get('jogadores_processados') or 0)} | "
+                f"Data base: {result.get('data_base') or '-'}"
+            )
+        else:
+            st.error("; ".join(result.get("errors", ["Nao foi possivel reprocessar o ranking atual."])))
+
+    with st.container(key="ranking_reprocess_shell"):
+        action_col, info_col = st.columns([0.28, 0.72], vertical_alignment="center")
+        with action_col:
+            clicked = st.button(
+                "Reprocessar Ranking Atual",
+                type="primary",
+                width="stretch",
+                key="ranking_reprocess_button",
+            )
+        with info_col:
+            st.caption(
+                "Use depois de importacoes, fusoes ou correcoes manuais para recriar rankings_snapshot e ranking_itens."
+            )
+
+    if clicked:
+        result = reprocess_current_ranking(str(profile.get("id") or ""))
+        if result.get("success"):
+            clear_dashboard_caches()
+            clear_curation_caches()
+        st.session_state.ranking_reprocess_last_result = result
+        st.rerun()
+
+
 def render_monthly_import_section(profile):
     ui_html("""
         <section class="section-anchor" id="importacao-mensal-ranking">
@@ -6287,6 +6337,7 @@ def render_curation_page(profile):
         "Curadoria atualizada.",
     )
 
+    render_ranking_reprocess_section(profile)
     render_monthly_import_section(profile)
 
     status_options = {
