@@ -4534,7 +4534,7 @@ def render_chart(data, player_options, default_players):
             template="plotly_dark",
             height=460,
             margin=dict(l=10, r=10, t=34, b=8),
-            paper_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="#070c0a",
             plot_bgcolor="#070c0a",
             hovermode="closest",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=12)),
@@ -4552,7 +4552,7 @@ def render_chart(data, player_options, default_players):
                 font=dict(color="#f6f1d5", size=13),
             ),
         )
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
+        st.plotly_chart(fig, width="stretch", theme=None, config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 
 def open_player_profile(nickname):
