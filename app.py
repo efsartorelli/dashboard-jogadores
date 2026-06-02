@@ -1647,6 +1647,17 @@ def inject_css():
         font-weight: 760;
     }}
 
+    .js-plotly-plot .hoverlayer .hovertext path,
+    .js-plotly-plot .hoverlayer .hovertext rect {{
+        fill: #10140f !important;
+        stroke: #f4c95d !important;
+    }}
+
+    .js-plotly-plot .hoverlayer .hovertext text,
+    .js-plotly-plot .hoverlayer .hovertext tspan {{
+        fill: #f6f1d5 !important;
+    }}
+
     .rb-table-wrap {{
         overflow-x: auto;
         border: 1px solid var(--rb-border);
@@ -4521,7 +4532,7 @@ def render_chart(data, player_options, default_players):
             df_player = plot_data[plot_data["nickname"] == player].sort_values("date")
             df_player = downsample_timeseries(df_player)
             trace_color = colors[index % len(colors)]
-            fig.add_trace(go.Scattergl(
+            fig.add_trace(go.Scatter(
                 x=df_player["date"],
                 y=df_player["catches"],
                 mode="lines+markers",
@@ -4543,6 +4554,7 @@ def render_chart(data, player_options, default_players):
             paper_bgcolor="#070c0a",
             plot_bgcolor="#070c0a",
             hovermode="closest",
+            showlegend=False,
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
