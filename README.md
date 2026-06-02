@@ -157,6 +157,8 @@ pelo Supabase Auth.
 
 URL oficial de producao:
 `https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app`.
+Para recuperacao de senha, adicione tambem esta URL em `Redirect URLs`:
+`https://dashboard-jogadores-yhkbgujmiz4nkfgsh3xnvq.streamlit.app?page=reset-password`.
 Se algum secret local ou variavel antiga apontar para uma URL de desenvolvimento,
 o app ignora esse valor para redirects de Auth e usa a URL oficial acima.
 

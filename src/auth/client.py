@@ -201,6 +201,14 @@ class SupabaseAuthClient:
             payload["redirect_to"] = redirect_to
         self._request("POST", "/auth/v1/recover", json=payload)
 
+    def update_password(self, access_token: str, password: str) -> None:
+        self._request(
+            "PUT",
+            "/auth/v1/user",
+            json={"password": password},
+            bearer_token=access_token,
+        )
+
 
 def get_auth_client() -> SupabaseAuthClient:
     return SupabaseAuthClient()

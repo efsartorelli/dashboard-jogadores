@@ -2,6 +2,7 @@ from html import escape
 from datetime import date
 import os
 import time
+from urllib.parse import urlencode
 
 import numpy as np
 import pandas as pd
@@ -255,6 +256,7 @@ def render_feedback(result, success_message, info_message=None):
 
 AUTH_SESSION_STATE_KEY = "supabase_auth_session"
 AUTH_VALIDATED_AT_STATE_KEY = "supabase_auth_validated_at"
+RESET_PASSWORD_PAGE = "reset-password"
 
 
 def get_session_from_state() -> AuthSession | None:
@@ -302,6 +304,117 @@ def record_auth_attempt() -> None:
     st.session_state.auth_attempts = attempts[-12:]
 
 
+def build_auth_redirect_url(page: str | None = None) -> str:
+    base_url = SUPABASE_AUTH_REDIRECT_URL.rstrip("/")
+    if not page:
+        return base_url
+    separator = "&" if "?" in base_url else "?"
+    return f"{base_url}{separator}{urlencode({'page': page})}"
+
+
+def friendly_auth_error(exc: Exception | str) -> str:
+    message = str(exc or "").casefold()
+    if any(term in message for term in ("invalid login", "invalid credentials", "email not found", "invalid_grant")):
+        return "Email ou senha incorretos. Verifique os dados e tente novamente."
+    if any(term in message for term in ("email not confirmed", "email_confirmed", "confirm")):
+        return "Seu email ainda nao foi confirmado. Verifique sua caixa de entrada."
+    if any(term in message for term in ("rate limit", "too many", "muitas tentativas")):
+        return "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
+    if any(term in message for term in ("conectar", "connection", "timeout", "network")):
+        return "Nao foi possivel conectar ao servidor. Tente novamente em instantes."
+    if any(term in message for term in ("already registered", "user already", "already exists")):
+        return "Ja existe uma conta com este email. Tente entrar ou recupere sua senha."
+    return "Nao foi possivel concluir esta acao agora. Tente novamente."
+
+
+def get_reset_access_token_from_query() -> str:
+    token = st.query_params.get("access_token", "")
+    if isinstance(token, list):
+        token = token[0] if token else ""
+    return str(token or "").strip()
+
+
+def inject_recovery_hash_bridge() -> None:
+    components.html(
+        """
+        <script>
+        const hash = window.location.hash ? window.location.hash.substring(1) : "";
+        if (hash) {
+            const hashParams = new URLSearchParams(hash);
+            const type = hashParams.get("type");
+            const accessToken = hashParams.get("access_token");
+            if (accessToken && (!type || type === "recovery")) {
+                const url = new URL(window.location.href);
+                url.hash = "";
+                url.searchParams.set("page", "reset-password");
+                for (const key of ["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type"]) {
+                    const value = hashParams.get(key);
+                    if (value) {
+                        url.searchParams.set(key, value);
+                    }
+                }
+                window.location.replace(url.toString());
+            }
+        }
+        </script>
+        """,
+        height=0,
+    )
+
+
+def render_reset_password_page():
+    inject_recovery_hash_bridge()
+
+    ui_html("""
+        <section class="auth-page section-anchor">
+            <div class="auth-brand">
+                <div class="brand-orb auth-brand-orb">BR</div>
+                <div class="auth-brand-text">
+                    <div class="auth-title">Redefinir senha</div>
+                    <div class="auth-subtitle">Digite sua nova senha abaixo para recuperar o acesso a sua conta.</div>
+                </div>
+            </div>
+        </section>
+    """)
+
+    client = get_cached_auth_client()
+    auth_config = validate_required_settings(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
+    if not client.is_configured or not auth_config.ok:
+        st.error("Supabase Auth nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY nos secrets do ambiente.")
+        return
+
+    access_token = get_reset_access_token_from_query()
+    if not access_token:
+        st.info("Validando link de recuperacao. Se esta mensagem continuar, abra novamente o link recebido por email.")
+        return
+
+    with st.container(key="auth_reset_shell"):
+        with st.form("reset_password_form"):
+            password = st.text_input("Nova senha", type="password", key="reset_password")
+            confirm = st.text_input("Confirmar nova senha", type="password", key="reset_confirm")
+            submitted = st.form_submit_button("Salvar nova senha", type="primary")
+
+        if submitted:
+            if len(password) < 8:
+                st.error("Use uma senha com pelo menos 8 caracteres.")
+                return
+            if password != confirm:
+                st.error("As senhas nao conferem.")
+                return
+            try:
+                client.update_password(access_token, password)
+                clear_auth_session()
+                st.session_state.auth_feedback = (
+                    "success",
+                    "Senha alterada com sucesso. Voce ja pode fazer login novamente.",
+                )
+                st.query_params.clear()
+                st.query_params["page"] = "login"
+                st.rerun()
+            except AuthError:
+                st.error("Nao foi possivel alterar a senha. Abra novamente o link de recuperacao ou solicite um novo email.")
+
+
 def render_auth_page():
     ui_html("""
         <section class="auth-page section-anchor">
@@ -323,7 +436,8 @@ def render_auth_page():
 
     # Supabase envia emails de confirmacao/recuperacao. O SMTP profissional
     # deve ser configurado no painel do Supabase, nao em codigo Streamlit.
-    email_redirect_to = SUPABASE_AUTH_REDIRECT_URL
+    email_redirect_to = build_auth_redirect_url()
+    recovery_redirect_to = build_auth_redirect_url(RESET_PASSWORD_PAGE)
 
     feedback = st.session_state.pop("auth_feedback", None)
     if feedback:
@@ -352,7 +466,7 @@ def render_auth_page():
                         store_auth_session(session)
                         st.rerun()
                     except AuthError as exc:
-                        st.error(str(exc))
+                        st.error(friendly_auth_error(exc))
 
         with signup_tab:
             with st.container(key="auth_signup_shell"):
@@ -399,7 +513,7 @@ def render_auth_page():
                             st.rerun()
                         st.success("Conta criada. Verifique seu email para validar o acesso.")
                     except AuthError as exc:
-                        st.error(str(exc))
+                        st.error(friendly_auth_error(exc))
 
         with recover_tab:
             with st.container(key="auth_recover_shell"):
@@ -410,10 +524,10 @@ def render_auth_page():
                 st.caption("Se houver uma conta vinculada a este email, voce recebera instrucoes para redefinir a senha.")
                 if submitted:
                     try:
-                        client.recover_password(email, redirect_to=email_redirect_to)
+                        client.recover_password(email, redirect_to=recovery_redirect_to)
                         st.success("Se o email existir, enviaremos o link de recuperacao.")
                     except AuthError as exc:
-                        st.error(str(exc))
+                        st.error(friendly_auth_error(exc))
 
 
 def require_authenticated_user() -> tuple[AuthSession, dict]:
@@ -450,7 +564,7 @@ def require_authenticated_user() -> tuple[AuthSession, dict]:
         return session, profile
     except AuthError as exc:
         clear_auth_session()
-        st.error(f"Sessao encerrada ou configuracao incompleta: {exc}")
+        st.error("Sua sessao expirou. Entre novamente para continuar.")
         render_auth_page()
         st.stop()
     except (DatabaseUnavailable, Exception) as exc:
@@ -6334,6 +6448,12 @@ def render_premium_page(profile):
 
 
 inject_css()
+initial_page_param = str(st.query_params.get("page", "")).strip().lower()
+if initial_page_param in {RESET_PASSWORD_PAGE, "redefinir-senha", "reset_password"}:
+    render_reset_password_page()
+    render_footer()
+    st.stop()
+
 session, profile = require_authenticated_user()
 public_profile_index = load_public_profile_index_safely()
 selected_public_player = resolve_selected_public_profile(public_profile_index)
